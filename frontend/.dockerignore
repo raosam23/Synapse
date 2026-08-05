@@ -1,0 +1,14 @@
+node_modules/
+.next/
+out/
+dist/
+build/
+bun.lockb
+.env
+.env.*
+.DS_Store
+.vscode/
+.idea/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

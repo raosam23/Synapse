@@ -4,10 +4,12 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.db.session import get_session
+from app.models.task import Task
 from app.models.team_member import TeamMember
 from app.schemas.team_member import TeamMemberCreate, TeamMemberRead, TeamMemberUpdate
 
@@ -101,6 +103,8 @@ async def update_team_member(
             status_code=status.HTTP_404_NOT_FOUND, detail="Team member not found"
         )
     for key, value in team_member.model_dump(exclude_unset=True).items():
+        if value is None:
+            continue
         setattr(db_team_member, key, value)
     session.add(db_team_member)
     await session.commit()
@@ -129,5 +133,8 @@ async def delete_team_member(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Team member not found"
         )
+    await session.execute(
+        update(Task).where(Task.assignee_id == team_member_id).values(assignee_id=None)
+    )
     await session.delete(db_team_member)
     await session.commit()

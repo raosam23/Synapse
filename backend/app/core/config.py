@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     """Settings for the application"""
 
-    APP_NAME: str = "SynapseAI"
+    APP_NAME: str = "Synapse AI"
     APP_VERSION: str = "1.0.0"
     APP_DESCRIPTION: str = "SynapseAI is a platform for AI-powered solutions"
 

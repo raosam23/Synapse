@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Shared instructions for any AI coding tool working in this repository (Cursor, Claude Code, Codex, Copilot, and similar). Keep changes aligned with this file and with MVP scope in GitHub issue #4.
+Shared instructions for any AI coding tool working in this repository (Cursor, Claude Code, Codex, Copilot, and similar). Keep changes aligned with this file. Product behavior for **v1.0.0** is defined here (supersedes older notes in GitHub issue #4 where they conflict).
 
 How the development will happen?
 The development will be done by the Human.
@@ -17,9 +17,57 @@ Help me write the code, that's it.
 
 ## What is Synapse
 
-Synapse is an AI-powered project management app. Users paste requirements as plain text; agents turn that into structured tasks, assign work across a team, and flag delivery risk — then the team manages work on a Kanban board.
+Synapse is an AI-powered scrum / project management app. A user creates a **project**, pastes **requirements** (including team, duration, and project details), and the AI:
 
-It is not a generic chatbot. The product is the agent loop plus the board: plan work, surface risk, and keep tasks moving.
+1. Reviews the requirements and shares an **opinion / analysis**
+2. Breaks work into tickets
+3. Plans **fixed 2-week sprints** for the whole project (v1.0.0: sprint length is always 2 weeks — not dynamically computed)
+4. Assigns a smart subset of work into the current sprint by capacity (story points)
+5. Keeps pulling from the backlog as people finish work, until the project is done
+
+It is not a generic chatbot. The product is the **agent loop + backlog + sprint board + comments**.
+
+### End-to-end flow (v1.0.0)
+
+1. **Project created** — user pastes requirements text that includes team size / members, project duration, and project details.
+2. **AI reviews** — agents analyze the requirements and produce an opinion (feasibility, risks, high-level plan).
+3. **Sprints defined** — project timeline is divided into consecutive **2-week sprints** (constant for v1).
+4. **Tickets created** — AI creates tasks; new tasks start in **`backlog`** (not on the sprint board).
+5. **Initial sprint fill** — AI assigns only what fits capacity (typically ~1–2 tasks per person based on complexity / story points). Remaining work stays in backlog.
+6. **Execution** — assignees move work `todo` → `doing` → `done` on the board (manual drag-and-drop and/or AI).
+7. **Pull next work** — when someone finishes (or has spare capacity), AI may pull another backlog item into the **current** sprint or schedule it for the **next** sprint, based on remaining effort and time left in the sprint.
+8. **Repeat** until the project is complete.
+
+### Task lifecycle (status)
+
+Tasks use exactly four statuses (store all four in the DB; do not invent extra ones without updating this file and the schema):
+
+| Status | Meaning | On sprint Kanban board? |
+|--------|---------|-------------------------|
+| `backlog` | Created, not yet pulled into an active sprint | **No** |
+| `todo` | In the current sprint, ready to start (after assignment into the sprint) | Yes |
+| `doing` | Actively in progress | Yes |
+| `done` | Finished | Yes |
+
+**Board rule:** the sprint Kanban shows only `todo` / `doing` / `done`. `backlog` lives in a separate backlog view, never as a board column.
+
+**Default for new tasks:** `backlog`. Moving into a sprint + assignment → `todo`.
+
+### Comments = progress signal (no CI/CD yet)
+
+v1.0.0 does **not** integrate with GitHub, Jenkins, or other CI/CD to detect commits or pipeline success.
+
+Status / sprint decisions that need “what happened in the real world” use **comments** (word of mouth):
+
+- Any **logged-in** user can comment on a task
+- The **AI** may also post comments when useful (e.g. why it reassigned or pulled a ticket)
+- Agents read comment history to update status, pull next backlog items, or adjust the sprint board
+
+### Agents (v1.0.0)
+
+- **Requirement Analyzer** — parse requirements, opinion/analysis, create backlog tasks + estimates
+- **Sprint Planner** — fill sprints by capacity (story points), assign to team members, pull next work when capacity frees up
+- **Risk Analyzer** — flag delivery risk on tasks / plan
 
 ## Repository layout
 
@@ -38,28 +86,52 @@ Synapse/
 |-------|------|
 | Backend | FastAPI, LangGraph, Python 3.12+ |
 | Frontend | Next.js, React |
-| Database | Postgres (planned; not wired yet) |
+| Database | Postgres (Docker Compose + SQLModel/Alembic) |
 | Package managers | `uv` (backend), `bun` (frontend) |
 
-## MVP scope (v1)
+## MVP scope (v1.0.0)
 
-Source of truth: GitHub issue **#4**.
+Source of truth: **this file** (and open GitHub issues for implementation slices). Issue #4 remains historical context.
 
 **In scope**
 
-- Agents: Requirement Analyzer, Sprint Planner, Risk Analyzer
-- Kanban board (drag and drop, task cards, risk flags)
-- Inputs: plain-text requirements; team members (name + optional skills); optional deadline
-- Manual task reassignment
+- Project creation with pasted requirements (team, duration, details)
+- AI opinion / analysis on requirements
+- Fixed **2-week** sprints for the project duration
+- Backlog + sprint Kanban (`todo` / `doing` / `done`)
+- AI task creation, capacity-based assignment, and pull-from-backlog loop
+- Story-point (or equivalent effort) estimates and per-person sprint capacity
+- Risk flags on tasks
+- Task comments (humans + AI); agents use comments as the progress signal
+- Manual reassignment / board moves by users
+- Minimal auth so “logged-in” comment authors exist
 
-**Deferred to v2**
+**Deferred to v2+**
 
-- Timeline Generator, Standup Generator
-- Gantt chart, file upload (PDF/txt), auth/multi-tenant, realtime collab, Slack/email
+- Dynamic sprint length (AI-chosen weeks)
+- GitHub / Jenkins / CI/CD–driven status updates
+- Gantt chart, file upload (PDF/txt), multi-tenant, realtime collab, Slack/email
+- Standalone Timeline / Standup generator products (standup-style updates may appear as comments in v1)
 
 **Out of scope for v1**
 
-- Do not build deferred/out-of-scope features unless an issue explicitly expands scope
+- Do not build deferred features unless an issue explicitly expands scope
+
+## Planned schema (v1.0.0) — for implementers
+
+Keep models minimal; add only what the flow above needs.
+
+| Entity | Purpose (high level) |
+|--------|----------------------|
+| `User` | Logged-in identity for comments / authorship |
+| `Project` | Requirements text, duration, AI opinion/analysis, fixed sprint length (2 weeks), project status |
+| `TeamMember` | Belongs to a project; name + skills |
+| `Sprint` | Belongs to a project; ordered 2-week window (`start_date` / `end_date`) |
+| `Task` | Belongs to a project; `status`; optional `assignee_id`; optional `sprint_id` (null while backlog); story points / effort; risk flag |
+| `TaskDependency` | Optional `from_task` → `to_task` edges |
+| `Comment` | Belongs to a task; body; author (user and/or AI); timestamps |
+
+**Current #20 slice:** start with `TeamMember` + `Task` (+ `TaskDependency`). Add `Project`, `Sprint`, `Comment`, and `User` in follow-up tickets once the first migration lands — but design FKs with this target in mind (e.g. leave room for `project_id` / `sprint_id` on `Task`).
 
 ## Local development
 
@@ -98,5 +170,5 @@ bun run dev
 
 - Prefer editing existing files over creating new ones when possible
 - Match existing style; do not add drive-by refactors unrelated to the ticket
-- Ask before expanding MVP scope beyond #4
-- When unsure, check open issues and #4 before inventing product behavior
+- Ask before expanding beyond **v1.0.0** scope in this file
+- When unsure about product behavior, follow this file first, then open issues

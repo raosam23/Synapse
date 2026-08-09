@@ -4,7 +4,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -103,8 +103,6 @@ async def update_team_member(
             status_code=status.HTTP_404_NOT_FOUND, detail="Team member not found"
         )
     for key, value in team_member.model_dump(exclude_unset=True).items():
-        if value is None:
-            continue
         setattr(db_team_member, key, value)
     session.add(db_team_member)
     await session.commit()
@@ -133,8 +131,22 @@ async def delete_team_member(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Team member not found"
         )
-    await session.execute(
-        update(Task).where(Task.assignee_id == team_member_id).values(assignee_id=None)
+
+    assigned_task = await session.execute(
+        select(Task.id).where(Task.assignee_id == team_member_id).limit(1)
     )
-    await session.delete(db_team_member)
-    await session.commit()
+    if assigned_task.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot delete team member while they are assigned to tasks",
+        )
+
+    try:
+        await session.delete(db_team_member)
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot delete team member while they are assigned to tasks",
+        )

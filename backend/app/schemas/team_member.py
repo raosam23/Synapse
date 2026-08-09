@@ -1,8 +1,9 @@
 """Pydantic schemas for team members."""
 
+from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class TeamMemberCreate(BaseModel):
@@ -15,7 +16,7 @@ class TeamMemberCreate(BaseModel):
 
 
 class TeamMemberUpdate(BaseModel):
-    """Pydantic schema for updating a team member."""
+    """Pydantic schema for updating a team member (omit fields; do not send null)."""
 
     name: str | None = Field(
         description="The name of the team member to update.", min_length=1, default=None
@@ -23,6 +24,15 @@ class TeamMemberUpdate(BaseModel):
     skills: list[str] | None = Field(
         description="The skills of the team member to update.", default=None
     )
+
+    @field_validator("name", "skills", mode="before")
+    @classmethod
+    def reject_null(cls, value: Any) -> Any:
+        if value is None:
+            raise ValueError(
+                "null is not allowed; omit the field to leave it unchanged"
+            )
+        return value
 
 
 class TeamMemberRead(BaseModel):

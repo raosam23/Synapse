@@ -73,10 +73,12 @@ Status / sprint decisions that need “what happened in the real world” use **
 
 ```
 Synapse/
-├── backend/          # FastAPI + LangGraph (Python)
-├── frontend/         # Next.js app
-├── .github/          # Issue templates, workflows
-├── AGENTS.md         # This file
+├── backend/           # FastAPI + LangGraph (Python)
+├── frontend/          # Next.js app
+├── .github/           # Issue templates, workflows
+├── docker-compose.yml # Postgres + app services
+├── .env.example       # Local DB env template
+├── AGENTS.md          # This file
 └── README.md
 ```
 
@@ -131,19 +133,38 @@ Keep models minimal; add only what the flow above needs.
 | `TaskDependency` | Optional `from_task` → `to_task` edges |
 | `Comment` | Belongs to a task; body; author (user and/or AI); timestamps |
 
-**Current #20 slice:** start with `TeamMember` + `Task` (+ `TaskDependency`). Add `Project`, `Sprint`, `Comment`, and `User` in follow-up tickets once the first migration lands — but design FKs with this target in mind (e.g. leave room for `project_id` / `sprint_id` on `Task`).
+**Schema progress:** `TeamMember`, `Task`, and `TaskDependency` are migrated. Add `Project`, `Sprint`, `Comment`, and `User` in follow-up tickets — keep designing FKs with that target in mind (e.g. `project_id` / `sprint_id` on `Task`).
 
 ## Local development
+
+Human-facing detail: [`README.md`](./README.md). Critical commands below must stay in sync with the README.
+
+### Env + Postgres
+
+```bash
+cp .env.example .env
+docker compose up database -d
+```
+
+`.env` is gitignored. Host apps use `DATABASE_URL` with `postgresql+asyncpg://…@localhost:5432/…` (see `.env.example`). Compose backend uses hostname `database` instead of `localhost`.
 
 ### Backend
 
 ```bash
 cd backend
 uv sync
-uv run uvicorn main:app --reload
+uv run alembic upgrade head
+uv run uvicorn app.main:app --reload
 ```
 
-Health check: `GET /health` → `{"status":"ok"}`
+Health check: `GET http://localhost:8000/health` → `{"status":"ok"}`
+
+Migrations are not applied on container start. After changing models under `backend/app/models/`:
+
+```bash
+uv run alembic revision --autogenerate -m "short description"
+uv run alembic upgrade head
+```
 
 ### Frontend
 
@@ -151,6 +172,15 @@ Health check: `GET /health` → `{"status":"ok"}`
 cd frontend
 bun install
 bun run dev
+```
+
+### Full stack via Compose
+
+```bash
+docker compose up --build
+# then migrate (host or exec):
+cd backend && uv run alembic upgrade head
+# or: docker compose exec backend uv run alembic upgrade head
 ```
 
 ## Git and PR workflow

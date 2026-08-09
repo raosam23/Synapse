@@ -8,12 +8,13 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     """Settings for the application"""
 
-    APP_NAME: str = "SynapseAI"
+    APP_NAME: str = "Synapse AI"
     APP_VERSION: str = "1.0.0"
     APP_DESCRIPTION: str = "SynapseAI is a platform for AI-powered solutions"
 
-    # Database settings
-    DATABASE_URL: str
+    # Optional at import time so app.main (and test_health) can load without CI/.env.
+    # Required before any DB access — see app.db.session.
+    DATABASE_URL: str | None = None
 
     class Config:
         """Configuration for the application"""

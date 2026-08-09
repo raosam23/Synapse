@@ -28,7 +28,12 @@ def upgrade() -> None:
         "team_members",
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("name", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-        sa.Column("skills", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column(
+            "skills",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=False,
+            server_default=sa.text("'[]'::jsonb"),
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_table(
@@ -83,4 +88,5 @@ def downgrade() -> None:
     op.drop_table("task_dependencies")
     op.drop_table("tasks")
     op.drop_table("team_members")
+    op.execute("DROP TYPE IF EXISTS taskstatus")
     # ### end Alembic commands ###

@@ -145,7 +145,7 @@ cd frontend
 bun run lint
 ```
 
-CI runs lint, tests, and Docker image builds on PRs to `main`.
+CI runs lint, tests, and Docker image builds on PRs to `main`. The test job starts an ephemeral Postgres 15 service, runs `alembic upgrade head`, then `pytest`. CI DB credentials come from GitHub Actions secrets (`CI_POSTGRES_USER`, `CI_POSTGRES_PASSWORD`, `CI_POSTGRES_DB`) — not from committed files.
 
 ---
 

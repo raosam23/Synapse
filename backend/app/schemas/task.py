@@ -1,8 +1,9 @@
 """Pydantic schemas for tasks."""
 
+from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.task import TaskStatus
 
@@ -80,3 +81,13 @@ class TaskUpdate(BaseModel):
     risk_flag: bool | None = Field(
         description="The risk flag of the task to update.", default=None
     )
+
+    @field_validator("title", "status", mode="before")
+    @classmethod
+    def reject_null(cls, value: Any) -> Any:
+        """Reject null values for the title and status fields."""
+        if value is None:
+            raise ValueError(
+                "Null is not allowed, omit the field to leave it unchanged",
+            )
+        return value

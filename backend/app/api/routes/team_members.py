@@ -144,9 +144,9 @@ async def delete_team_member(
     try:
         await session.delete(db_team_member)
         await session.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await session.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Cannot delete team member while they are assigned to tasks",
-        )
+        ) from exc

@@ -4,6 +4,8 @@ from datetime import datetime
 from enum import Enum
 from uuid import UUID, uuid4
 
+from sqlalchemy import Column
+from sqlalchemy import Enum as SAEnum
 from sqlmodel import Field, SQLModel
 
 
@@ -24,7 +26,17 @@ class Task(SQLModel, table=True):
     title: str = Field(nullable=False)
     sprint_id: UUID | None = None
     description: str | None = None
-    status: TaskStatus = Field(default=TaskStatus.BACKLOG)
+    status: TaskStatus = Field(
+        default=TaskStatus.BACKLOG,
+        sa_column=Column(
+            SAEnum(
+                TaskStatus,
+                name="taskstatus",
+                values_callable=lambda enum: [item.value for item in enum],
+            ),
+            nullable=False,
+        ),
+    )
     assignee_id: UUID | None = Field(foreign_key="team_members.id", default=None)
     story_points: int | None = None
     risk_flag: bool | None = None

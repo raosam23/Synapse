@@ -1,0 +1,149 @@
+"""Routes for tasks."""
+
+from datetime import datetime
+from typing import Annotated
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import col, select
+
+from app.db.session import get_session
+from app.models import Task, TeamMember
+from app.schemas.task import TaskCreate, TaskRead, TaskUpdate
+
+router = APIRouter()
+
+Session = Annotated[AsyncSession, Depends(get_session)]
+
+
+async def _ensure_assignee_exists(session: AsyncSession, assignee_id: UUID) -> None:
+    """Raise 404 if assignee_id is not an existing team member."""
+    result = await session.execute(
+        select(TeamMember).where(TeamMember.id == assignee_id)
+    )
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Team member not found",
+        )
+
+
+@router.post("/", response_model=TaskRead, status_code=status.HTTP_201_CREATED)
+async def create_task(task: TaskCreate, session: Session) -> TaskRead:
+    """Endpoint to create a new task.
+    Args:
+        task: TaskCreate
+        session: Session
+    Returns:
+        TaskRead
+    """
+    if task.assignee_id is not None:
+        await _ensure_assignee_exists(session, task.assignee_id)
+
+    new_task = Task(
+        title=task.title,
+        description=task.description,
+        assignee_id=task.assignee_id,
+        sprint_id=task.sprint_id,
+        status=task.status,
+        story_points=task.story_points,
+        risk_flag=task.risk_flag,
+    )
+    session.add(new_task)
+    await session.commit()
+    await session.refresh(new_task)
+    return TaskRead.model_validate(new_task)
+
+
+@router.get("/", response_model=list[TaskRead], status_code=status.HTTP_200_OK)
+async def get_all_tasks(session: Session) -> list[TaskRead]:
+    """Endpoint to get all tasks.
+    Args:
+        session: Session
+    Returns:
+        list[TaskRead]
+    """
+    tasks_proxy = await session.execute(
+        select(Task).order_by(col(Task.created_at).desc())
+    )
+    tasks = tasks_proxy.scalars().all()
+    return [TaskRead.model_validate(task) for task in tasks]
+
+
+@router.get("/{task_id}", response_model=TaskRead, status_code=status.HTTP_200_OK)
+async def get_task_by_id(task_id: UUID, session: Session) -> TaskRead:
+    """Endpoint to get a task by its ID.
+    Args:
+        task_id: UUID
+        session: Session
+    Returns:
+        TaskRead
+    """
+    task_proxy = await session.execute(select(Task).where(Task.id == task_id))
+    task = task_proxy.scalar_one_or_none()
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Task not found"
+        )
+    return TaskRead.model_validate(task)
+
+
+@router.put("/{task_id}", response_model=TaskRead, status_code=status.HTTP_200_OK)
+async def update_task(
+    task_id: UUID, task_update: TaskUpdate, session: Session
+) -> TaskRead:
+    """Endpoint to update a task.
+    Args:
+        task_id: UUID
+        task_update: TaskUpdate
+        session: Session
+    Returns:
+        TaskRead
+    """
+    task_proxy = await session.execute(select(Task).where(Task.id == task_id))
+    task = task_proxy.scalar_one_or_none()
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Task not found"
+        )
+
+    updates = task_update.model_dump(exclude_unset=True)
+    if "assignee_id" in updates and updates["assignee_id"] is not None:
+        await _ensure_assignee_exists(session, updates["assignee_id"])
+
+    for key, value in updates.items():
+        setattr(task, key, value)
+    task.updated_at = datetime.now()  # noqa: DTZ005 — column is TIMESTAMP WITHOUT TIME ZONE
+
+    session.add(task)
+    await session.commit()
+    await session.refresh(task)
+    return TaskRead.model_validate(task)
+
+
+@router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_task(task_id: UUID, session: Session) -> None:
+    """Endpoint to delete a task.
+    Args:
+        task_id: UUID
+        session: Session
+    Returns:
+        None
+    """
+    task_proxy = await session.execute(select(Task).where(Task.id == task_id))
+    task = task_proxy.scalar_one_or_none()
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Task not found"
+        )
+    try:
+        await session.delete(task)
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot delete task while it has dependency links",
+        ) from exc

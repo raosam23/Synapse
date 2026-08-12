@@ -4,13 +4,15 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import desc
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import col, select
+from sqlmodel import select
 
 from app.db.session import get_session
 from app.models import Task, TeamMember
+from app.models.task import TaskStatus
 from app.schemas.task import TaskCreate, TaskRead, TaskUpdate
 
 router = APIRouter()
@@ -58,17 +60,23 @@ async def create_task(task: TaskCreate, session: Session) -> TaskRead:
 
 
 @router.get("/", response_model=list[TaskRead], status_code=status.HTTP_200_OK)
-async def get_all_tasks(session: Session) -> list[TaskRead]:
+async def get_all_tasks(
+    session: Session,
+    status_filter: Annotated[TaskStatus | None, Query(alias="status")] = None,
+) -> list[TaskRead]:
     """Endpoint to get all tasks.
     Args:
         session: Session
+        status_filter: optional TaskStatus query filter (`?status=`)
     Returns:
         list[TaskRead]
     """
-    tasks_proxy = await session.execute(
-        select(Task).order_by(col(Task.created_at).desc())
-    )
-    tasks = tasks_proxy.scalars().all()
+    statement = select(Task)
+    if status_filter is not None:
+        statement = statement.where(Task.status == status_filter)
+    statement = statement.order_by(desc(Task.created_at))
+    task_proxy = await session.execute(statement)
+    tasks = task_proxy.scalars().all()
     return [TaskRead.model_validate(task) for task in tasks]
 
 

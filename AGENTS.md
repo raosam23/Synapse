@@ -69,6 +69,21 @@ Status / sprint decisions that need “what happened in the real world” use **
 - **Sprint Planner** — fill sprints by capacity (story points), assign to team members, pull next work when capacity frees up
 - **Risk Analyzer** — flag delivery risk on tasks / plan
 
+### Authentication (v1.0.0)
+
+`User` and `TeamMember` are **not the same thing**:
+
+- **`User`** — a login identity (`email` + `password_hash`). Created via `/api/v1/auth/register`. Required to authenticate and to comment/act as a real person.
+- **`TeamMember`** — a roster entry on a project (`name` + `skills`), used for assignment. A `TeamMember` may optionally be linked to a `User` via `TeamMember.user_id`, but nothing currently sets that link automatically when a `TeamMember` is created or a `User` registers (tracked in [#43](https://github.com/raosam23/Synapse/issues/43)).
+
+Auth is JWT-based and stateless:
+
+- `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
+- All `team-members`, `tasks`, and `task-dependencies` endpoints require a valid `Authorization: Bearer <token>` header
+- A task's `created_by_id` is always set server-side from the authenticated user — never accepted from the client
+- Assigning a task to a `TeamMember` who has no linked `User` is rejected (`409`) until #43 lands
+- **No server-side logout in v1.0.0** — tokens are stateless; the client just discards the token to "log out"
+
 ## Repository layout
 
 ```
@@ -125,15 +140,15 @@ Keep models minimal; add only what the flow above needs.
 
 | Entity | Purpose (high level) |
 |--------|----------------------|
-| `User` | Logged-in identity for comments / authorship |
+| `User` | Logged-in identity for auth, comments / authorship (`email` + `password_hash`) |
 | `Project` | Requirements text, duration, AI opinion/analysis, fixed sprint length (2 weeks), project status |
-| `TeamMember` | Belongs to a project; name + skills |
+| `TeamMember` | Belongs to a project; name + skills; optional `user_id` link to a `User` |
 | `Sprint` | Belongs to a project; ordered 2-week window (`start_date` / `end_date`) |
-| `Task` | Belongs to a project; `status`; optional `assignee_id`; optional `sprint_id` (null while backlog); story points / effort; risk flag |
+| `Task` | Belongs to a project; `status`; optional `assignee_id`; optional `sprint_id` (null while backlog); story points / effort; risk flag; `created_by_id` (the `User` who created it) |
 | `TaskDependency` | Optional `from_task` → `to_task` edges |
 | `Comment` | Belongs to a task; body; author (user and/or AI); timestamps |
 
-**Schema progress:** `TeamMember`, `Task`, and `TaskDependency` are migrated. Add `Project`, `Sprint`, `Comment`, and `User` in follow-up tickets — keep designing FKs with that target in mind (e.g. `project_id` / `sprint_id` on `Task`).
+**Schema progress:** `User`, `TeamMember`, `Task`, and `TaskDependency` are migrated (including `Task.created_by_id` and `TeamMember.user_id`). Add `Project`, `Sprint`, and `Comment` in follow-up tickets — keep designing FKs with that target in mind (e.g. `project_id` / `sprint_id` on `Task`).
 
 ## Local development
 

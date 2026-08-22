@@ -16,6 +16,12 @@ class Settings(BaseSettings):
     # Required before any DB access — see app.db.session.
     DATABASE_URL: str | None = None
 
+    # JWT settings
+    SECRET_KEY: str = "your-very-secret-key"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    SALT_ROUNDS: int = 12
+
     class Config:
         """Configuration for the application"""
 

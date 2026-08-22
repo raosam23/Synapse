@@ -12,21 +12,25 @@ from app.db.session import get_session
 from app.models.task import Task
 from app.models.team_member import TeamMember
 from app.schemas.team_member import TeamMemberCreate, TeamMemberRead, TeamMemberUpdate
+from app.core.security import get_current_user
+from app.models import User
 
 Session = Annotated[AsyncSession, Depends(get_session)]
+CurrentUser = Annotated[User, Depends(get_current_user)]
 
 router = APIRouter()
 
 
 @router.post("/", response_model=TeamMemberRead, status_code=status.HTTP_201_CREATED)
 async def create_team_member(
-    team_member: TeamMemberCreate, session: Session
+    team_member: TeamMemberCreate, session: Session, current_user: CurrentUser
 ) -> TeamMemberRead:
     """
     Create a new team member
     Args:
         team_member: TeamMemberCreate
         session: Session
+        current_user: CurrentUser
     Returns:
         TeamMemberRead
     """
@@ -41,11 +45,12 @@ async def create_team_member(
 
 
 @router.get("/", response_model=list[TeamMemberRead], status_code=status.HTTP_200_OK)
-async def get_team_members(session: Session):
+async def get_team_members(session: Session, current_user: CurrentUser) -> list[TeamMemberRead]:
     """
     Get all team members
     Args:
         session: Session
+        current_user: CurrentUser
     Returns:
         list[TeamMemberRead]
     """
@@ -57,12 +62,13 @@ async def get_team_members(session: Session):
 @router.get(
     "/{team_member_id}", response_model=TeamMemberRead, status_code=status.HTTP_200_OK
 )
-async def get_team_member(team_member_id: UUID, session: Session):
+async def get_team_member(team_member_id: UUID, session: Session, current_user: CurrentUser) -> TeamMemberRead:
     """
     Get a team member by ID
     Args:
         team_member_id: UUID
         session: Session
+        current_user: CurrentUser
     Returns:
         TeamMemberRead
     """
@@ -84,6 +90,7 @@ async def update_team_member(
     team_member_id: UUID,
     team_member: TeamMemberUpdate,
     session: Session,
+    current_user: CurrentUser
 ) -> TeamMemberRead:
     """
     Update a team member
@@ -91,6 +98,7 @@ async def update_team_member(
         team_member_id: UUID
         team_member: TeamMemberUpdate
         session: Session
+        current_user: CurrentUser
     Returns:
         TeamMemberRead
     """
@@ -114,12 +122,14 @@ async def update_team_member(
 async def delete_team_member(
     team_member_id: UUID,
     session: Session,
+    current_user: CurrentUser
 ) -> None:
     """
     Delete a team member
     Args:
         team_member_id: UUID
         session: Session
+        current_user: CurrentUser
     Returns:
         None
     """

@@ -109,6 +109,37 @@ docker compose exec backend uv run alembic upgrade head
 
 ---
 
+## Authentication
+
+All `team-members`, `tasks`, and `task-dependencies` endpoints require a valid JWT `Authorization` header. Register and log in first:
+
+```bash
+# 1. Register a user
+curl -X POST http://localhost:8000/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email": "jennie@example.com", "password": "supersecret123", "name": "Jennie"}'
+
+# 2. Log in to get an access token
+curl -X POST http://localhost:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "jennie@example.com", "password": "supersecret123"}'
+# -> {"access_token": "<jwt>", "token_type": "bearer"}
+
+# 3. Call a protected endpoint with the token
+curl http://localhost:8000/api/v1/tasks/ \
+  -H "Authorization: Bearer <jwt>"
+
+# Check who you're logged in as
+curl http://localhost:8000/api/v1/auth/me \
+  -H "Authorization: Bearer <jwt>"
+```
+
+In [Swagger UI](http://localhost:8000/docs), use the **Authorize** button (top right) and paste just the raw token — Swagger adds the `Bearer ` prefix for you.
+
+Tokens expire after `ACCESS_TOKEN_EXPIRE_MINUTES` (see `.env.example`). There is no server-side logout endpoint in v1.0.0 — auth is stateless, so "logging out" just means discarding the token on the client.
+
+---
+
 ## Useful Alembic commands
 
 From `backend/`:

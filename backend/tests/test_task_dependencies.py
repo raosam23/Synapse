@@ -16,6 +16,7 @@ from app.api.routes.task_dependencies import (
 )
 from app.models.task import Task, TaskStatus
 from app.models.task_dependency import TaskDependency
+from app.models.user import User
 from app.schemas.task_dependency import TaskDependencyCreate, TaskDependencyRead
 
 
@@ -32,7 +33,7 @@ def _scalars_result(items: list) -> MagicMock:
 
 
 @pytest.mark.asyncio
-async def test_create_task_dependency_success() -> None:
+async def test_create_task_dependency_success(current_user: User) -> None:
     from_id = uuid4()
     to_id = uuid4()
     created_id = uuid4()
@@ -57,6 +58,7 @@ async def test_create_task_dependency_success() -> None:
     result = await create_task_dependency(
         TaskDependencyCreate(from_task_id=from_id, to_task_id=to_id),
         session,
+        current_user,
     )
 
     assert session.execute.await_count == 2
@@ -69,7 +71,7 @@ async def test_create_task_dependency_success() -> None:
 
 
 @pytest.mark.asyncio
-async def test_create_task_dependency_task_not_found() -> None:
+async def test_create_task_dependency_task_not_found(current_user: User) -> None:
     session = AsyncMock()
     session.execute = AsyncMock(return_value=_execute_result(scalar=None))
 
@@ -77,6 +79,7 @@ async def test_create_task_dependency_task_not_found() -> None:
         await create_task_dependency(
             TaskDependencyCreate(from_task_id=uuid4(), to_task_id=uuid4()),
             session,
+            current_user,
         )
 
     assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
@@ -85,7 +88,7 @@ async def test_create_task_dependency_task_not_found() -> None:
 
 
 @pytest.mark.asyncio
-async def test_create_task_dependency_duplicate_conflict() -> None:
+async def test_create_task_dependency_duplicate_conflict(current_user: User) -> None:
     from_id = uuid4()
     to_id = uuid4()
     session = AsyncMock()
@@ -105,6 +108,7 @@ async def test_create_task_dependency_duplicate_conflict() -> None:
         await create_task_dependency(
             TaskDependencyCreate(from_task_id=from_id, to_task_id=to_id),
             session,
+            current_user,
         )
 
     assert exc_info.value.status_code == status.HTTP_409_CONFLICT
@@ -118,7 +122,7 @@ def test_create_task_dependency_self_link_rejected() -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_all_task_dependencies_success() -> None:
+async def test_get_all_task_dependencies_success(current_user: User) -> None:
     from_id = uuid4()
     to_id = uuid4()
     deps = [
@@ -127,7 +131,7 @@ async def test_get_all_task_dependencies_success() -> None:
     session = AsyncMock()
     session.execute = AsyncMock(return_value=_scalars_result(deps))
 
-    result = await get_all_task_dependencies(session)
+    result = await get_all_task_dependencies(session, current_user)
 
     session.execute.assert_awaited_once()
     assert len(result) == 1
@@ -136,7 +140,7 @@ async def test_get_all_task_dependencies_success() -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_all_task_dependencies_with_filters() -> None:
+async def test_get_all_task_dependencies_with_filters(current_user: User) -> None:
     from_id = uuid4()
     to_id = uuid4()
     deps = [TaskDependency(id=uuid4(), from_task_id=from_id, to_task_id=to_id)]
@@ -144,7 +148,7 @@ async def test_get_all_task_dependencies_with_filters() -> None:
     session.execute = AsyncMock(return_value=_scalars_result(deps))
 
     result = await get_all_task_dependencies(
-        session, from_task_id=from_id, to_task_id=to_id
+        session, current_user, from_task_id=from_id, to_task_id=to_id
     )
 
     session.execute.assert_awaited_once()
@@ -153,7 +157,7 @@ async def test_get_all_task_dependencies_with_filters() -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_task_dependency_by_id_success() -> None:
+async def test_get_task_dependency_by_id_success(current_user: User) -> None:
     dep_id = uuid4()
     from_id = uuid4()
     to_id = uuid4()
@@ -161,7 +165,7 @@ async def test_get_task_dependency_by_id_success() -> None:
     session = AsyncMock()
     session.execute = AsyncMock(return_value=_execute_result(scalar=db_dep))
 
-    result = await get_task_dependency_by_id(dep_id, session)
+    result = await get_task_dependency_by_id(dep_id, session, current_user)
 
     session.execute.assert_awaited_once()
     assert result.id == dep_id
@@ -169,18 +173,18 @@ async def test_get_task_dependency_by_id_success() -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_task_dependency_by_id_not_found() -> None:
+async def test_get_task_dependency_by_id_not_found(current_user: User) -> None:
     session = AsyncMock()
     session.execute = AsyncMock(return_value=_execute_result(scalar=None))
 
     with pytest.raises(HTTPException) as exc_info:
-        await get_task_dependency_by_id(uuid4(), session)
+        await get_task_dependency_by_id(uuid4(), session, current_user)
 
     assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
 
 
 @pytest.mark.asyncio
-async def test_delete_task_dependency_success() -> None:
+async def test_delete_task_dependency_success(current_user: User) -> None:
     dep_id = uuid4()
     db_dep = TaskDependency(id=dep_id, from_task_id=uuid4(), to_task_id=uuid4())
     session = AsyncMock()
@@ -188,7 +192,7 @@ async def test_delete_task_dependency_success() -> None:
     session.commit = AsyncMock()
     session.execute = AsyncMock(return_value=_execute_result(scalar=db_dep))
 
-    result = await delete_task_dependency(dep_id, session)
+    result = await delete_task_dependency(dep_id, session, current_user)
 
     assert result is None
     session.delete.assert_awaited_once()
@@ -196,12 +200,12 @@ async def test_delete_task_dependency_success() -> None:
 
 
 @pytest.mark.asyncio
-async def test_delete_task_dependency_not_found() -> None:
+async def test_delete_task_dependency_not_found(current_user: User) -> None:
     session = AsyncMock()
     session.execute = AsyncMock(return_value=_execute_result(scalar=None))
 
     with pytest.raises(HTTPException) as exc_info:
-        await delete_task_dependency(uuid4(), session)
+        await delete_task_dependency(uuid4(), session, current_user)
 
     assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
     session.delete.assert_not_called()

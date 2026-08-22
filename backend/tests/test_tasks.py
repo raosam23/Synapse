@@ -16,11 +16,12 @@ from app.api.routes.tasks import (
     update_task,
 )
 from app.models.task import Task, TaskStatus
+from app.models.user import User
 from app.schemas.task import TaskCreate, TaskRead, TaskUpdate
 
 
 @pytest.mark.asyncio
-async def test_create_task_success_without_assignee() -> None:
+async def test_create_task_success_without_assignee(current_user: User) -> None:
     payload = TaskCreate(
         title="Write unit tests",
         description="Write unit tests for the task",
@@ -36,7 +37,7 @@ async def test_create_task_success_without_assignee() -> None:
 
     session.refresh = AsyncMock(side_effect=fake_refresh)
 
-    result = await create_task(payload, session)
+    result = await create_task(payload, session, current_user)
 
     session.add.assert_called_once()
     session.commit.assert_awaited_once()
@@ -55,7 +56,7 @@ def _execute_result(*, scalar: object) -> MagicMock:
 
 
 @pytest.mark.asyncio
-async def test_create_task_assignee_not_found() -> None:
+async def test_create_task_assignee_not_found(current_user: User) -> None:
     payload = TaskCreate(
         title="Write unit tests",
         description="Write unit tests for the task",
@@ -66,7 +67,7 @@ async def test_create_task_assignee_not_found() -> None:
     session.execute = AsyncMock(return_value=_execute_result(scalar=None))
 
     with pytest.raises(HTTPException) as exc_info:
-        await create_task(payload, session)
+        await create_task(payload, session, current_user)
 
     assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
     session.add.assert_not_called()
@@ -80,7 +81,7 @@ def _scalars_result(items: list) -> MagicMock:
 
 
 @pytest.mark.asyncio
-async def test_get_all_tasks_success() -> None:
+async def test_get_all_tasks_success(current_user: User) -> None:
     tasks = [
         Task(
             id=uuid4(),
@@ -98,7 +99,7 @@ async def test_get_all_tasks_success() -> None:
     session = AsyncMock()
     session.execute = AsyncMock(return_value=_scalars_result(items=tasks))
 
-    result = await get_all_tasks(session)
+    result = await get_all_tasks(session, current_user)
 
     session.execute.assert_called_once()
     assert len(result) == 2
@@ -112,7 +113,7 @@ async def test_get_all_tasks_success() -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_all_tasks_no_tasks() -> None:
+async def test_get_all_tasks_no_tasks(current_user: User) -> None:
     tasks = [
         Task(
             id=uuid4(),
@@ -124,7 +125,7 @@ async def test_get_all_tasks_no_tasks() -> None:
     session = AsyncMock()
     session.execute = AsyncMock(return_value=_scalars_result(items=tasks))
 
-    result = await get_all_tasks(session, status_filter=TaskStatus.TODO)
+    result = await get_all_tasks(session, current_user, status_filter=TaskStatus.TODO)
 
     session.execute.assert_awaited_once()
     assert len(result) == 1
@@ -132,7 +133,7 @@ async def test_get_all_tasks_no_tasks() -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_task_by_id_success() -> None:
+async def test_get_task_by_id_success(current_user: User) -> None:
     task_id = uuid4()
     db_task = Task(
         id=task_id,
@@ -143,7 +144,7 @@ async def test_get_task_by_id_success() -> None:
     session = AsyncMock()
     session.execute = AsyncMock(return_value=_execute_result(scalar=db_task))
 
-    result = await get_task_by_id(db_task.id, session)
+    result = await get_task_by_id(db_task.id, session, current_user)
 
     session.execute.assert_awaited_once()
     assert result.id == task_id
@@ -153,31 +154,31 @@ async def test_get_task_by_id_success() -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_task_by_id_not_found() -> None:
+async def test_get_task_by_id_not_found(current_user: User) -> None:
     session = AsyncMock()
     session.execute = AsyncMock(return_value=_execute_result(scalar=None))
 
     with pytest.raises(HTTPException) as exc_info:
-        await get_task_by_id(uuid4(), session)
+        await get_task_by_id(uuid4(), session, current_user)
 
     session.execute.assert_awaited_once()
     assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
 
 
 @pytest.mark.asyncio
-async def test_delete_task_not_found() -> None:
+async def test_delete_task_not_found(current_user: User) -> None:
     session = AsyncMock()
     session.execute = AsyncMock(return_value=_execute_result(scalar=None))
 
     with pytest.raises(HTTPException) as exc_info:
-        await delete_task(uuid4(), session)
+        await delete_task(uuid4(), session, current_user)
 
     assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
     session.delete.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_delete_task_success() -> None:
+async def test_delete_task_success(current_user: User) -> None:
     task_id = uuid4()
     db_task = Task(
         id=task_id,
@@ -190,7 +191,7 @@ async def test_delete_task_success() -> None:
     session.commit = AsyncMock()
     session.execute = AsyncMock(return_value=_execute_result(scalar=db_task))
 
-    result = await delete_task(task_id, session)
+    result = await delete_task(task_id, session, current_user)
 
     assert result is None
     session.delete.assert_awaited_once()
@@ -198,7 +199,7 @@ async def test_delete_task_success() -> None:
 
 
 @pytest.mark.asyncio
-async def test_delete_task_conflict_when_dependencies_exist() -> None:
+async def test_delete_task_conflict_when_dependencies_exist(current_user: User) -> None:
     task_id = uuid4()
     db_task = Task(
         id=task_id,
@@ -212,14 +213,14 @@ async def test_delete_task_conflict_when_dependencies_exist() -> None:
     session.commit = AsyncMock(side_effect=IntegrityError("stmt", {}, Exception()))
 
     with pytest.raises(HTTPException) as exc_info:
-        await delete_task(task_id, session)
+        await delete_task(task_id, session, current_user)
 
     assert exc_info.value.status_code == status.HTTP_409_CONFLICT
     session.rollback.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_update_task_success() -> None:
+async def test_update_task_success(current_user: User) -> None:
     task_id = uuid4()
     db_task = Task(id=task_id, title="Old", status=TaskStatus.BACKLOG)
     session = AsyncMock()
@@ -229,7 +230,7 @@ async def test_update_task_success() -> None:
     session.execute = AsyncMock(return_value=_execute_result(scalar=db_task))
 
     result = await update_task(
-        task_id, TaskUpdate(title="New", status=TaskStatus.TODO), session
+        task_id, TaskUpdate(title="New", status=TaskStatus.TODO), session, current_user
     )
 
     assert db_task.title == "New"
@@ -243,19 +244,19 @@ async def test_update_task_success() -> None:
 
 
 @pytest.mark.asyncio
-async def test_update_task_not_found() -> None:
+async def test_update_task_not_found(current_user: User) -> None:
     session = AsyncMock()
     session.execute = AsyncMock(return_value=_execute_result(scalar=None))
 
     with pytest.raises(HTTPException) as exc_info:
-        await update_task(uuid4(), TaskUpdate(title="Nope"), session)
+        await update_task(uuid4(), TaskUpdate(title="Nope"), session, current_user)
 
     assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
     session.commit.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_update_task_assignee_not_found() -> None:
+async def test_update_task_assignee_not_found(current_user: User) -> None:
     task_id = uuid4()
     db_task = Task(id=task_id, title="Old", status=TaskStatus.BACKLOG)
     session = AsyncMock()
@@ -267,7 +268,9 @@ async def test_update_task_assignee_not_found() -> None:
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        await update_task(task_id, TaskUpdate(assignee_id=uuid4()), session)
+        await update_task(
+            task_id, TaskUpdate(assignee_id=uuid4()), session, current_user
+        )
 
     assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
     session.commit.assert_not_called()

@@ -40,5 +40,6 @@ class Task(SQLModel, table=True):
     assignee_id: UUID | None = Field(foreign_key="team_members.id", default=None)
     story_points: int | None = None
     risk_flag: bool | None = None
+    created_by_id: UUID | None = Field(foreign_key="users.id", default=None)
     created_at: datetime = Field(default_factory=datetime.now, nullable=False)
     updated_at: datetime = Field(default_factory=datetime.now, nullable=False)

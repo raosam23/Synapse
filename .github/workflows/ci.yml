@@ -44,6 +44,8 @@ jobs:
 
       - name: Backend tests
         working-directory: backend
+        env:
+          SECRET_KEY: your-super-safe-secret-key-for-testing-purposes-only
         run: |
           uv sync --dev
           uv run pytest

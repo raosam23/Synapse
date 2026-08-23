@@ -55,6 +55,9 @@ class TaskRead(BaseModel):
     risk_flag: bool | None = Field(
         description="The risk flag of the task.", default=None
     )
+    created_by_id: UUID | None = Field(
+        description="The id of the user who created this task.", default=None
+    )
 
 
 class TaskUpdate(BaseModel):

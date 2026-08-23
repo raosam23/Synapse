@@ -10,14 +10,16 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from app.core.security import get_current_user
 from app.db.session import get_session
-from app.models import Task, TeamMember
+from app.models import Task, TeamMember, User
 from app.models.task import TaskStatus
 from app.schemas.task import TaskCreate, TaskRead, TaskUpdate
 
 router = APIRouter()
 
 Session = Annotated[AsyncSession, Depends(get_session)]
+CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
 async def _ensure_assignee_exists(session: AsyncSession, assignee_id: UUID) -> None:
@@ -25,19 +27,28 @@ async def _ensure_assignee_exists(session: AsyncSession, assignee_id: UUID) -> N
     result = await session.execute(
         select(TeamMember).where(TeamMember.id == assignee_id)
     )
-    if result.scalar_one_or_none() is None:
+    team_member = result.scalar_one_or_none()
+    if team_member is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Team member not found",
         )
+    if team_member.user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Team member is not a user",
+        )
 
 
 @router.post("/", response_model=TaskRead, status_code=status.HTTP_201_CREATED)
-async def create_task(task: TaskCreate, session: Session) -> TaskRead:
+async def create_task(
+    task: TaskCreate, session: Session, current_user: CurrentUser
+) -> TaskRead:
     """Endpoint to create a new task.
     Args:
         task: TaskCreate
         session: Session
+        current_user: CurrentUser
     Returns:
         TaskRead
     """
@@ -52,6 +63,7 @@ async def create_task(task: TaskCreate, session: Session) -> TaskRead:
         status=task.status,
         story_points=task.story_points,
         risk_flag=task.risk_flag,
+        created_by_id=current_user.id,
     )
     session.add(new_task)
     await session.commit()
@@ -62,11 +74,13 @@ async def create_task(task: TaskCreate, session: Session) -> TaskRead:
 @router.get("/", response_model=list[TaskRead], status_code=status.HTTP_200_OK)
 async def get_all_tasks(
     session: Session,
+    current_user: CurrentUser,
     status_filter: Annotated[TaskStatus | None, Query(alias="status")] = None,
 ) -> list[TaskRead]:
     """Endpoint to get all tasks.
     Args:
         session: Session
+        current_user: CurrentUser
         status_filter: optional TaskStatus query filter (`?status=`)
     Returns:
         list[TaskRead]
@@ -81,11 +95,14 @@ async def get_all_tasks(
 
 
 @router.get("/{task_id}", response_model=TaskRead, status_code=status.HTTP_200_OK)
-async def get_task_by_id(task_id: UUID, session: Session) -> TaskRead:
+async def get_task_by_id(
+    task_id: UUID, session: Session, current_user: CurrentUser
+) -> TaskRead:
     """Endpoint to get a task by its ID.
     Args:
         task_id: UUID
         session: Session
+        current_user: CurrentUser
     Returns:
         TaskRead
     """
@@ -100,13 +117,14 @@ async def get_task_by_id(task_id: UUID, session: Session) -> TaskRead:
 
 @router.put("/{task_id}", response_model=TaskRead, status_code=status.HTTP_200_OK)
 async def update_task(
-    task_id: UUID, task_update: TaskUpdate, session: Session
+    task_id: UUID, task_update: TaskUpdate, session: Session, current_user: CurrentUser
 ) -> TaskRead:
     """Endpoint to update a task.
     Args:
         task_id: UUID
         task_update: TaskUpdate
         session: Session
+        current_user: CurrentUser
     Returns:
         TaskRead
     """
@@ -132,11 +150,14 @@ async def update_task(
 
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_task(task_id: UUID, session: Session) -> None:
+async def delete_task(
+    task_id: UUID, session: Session, current_user: CurrentUser
+) -> None:
     """Endpoint to delete a task.
     Args:
         task_id: UUID
         session: Session
+        current_user: CurrentUser
     Returns:
         None
     """

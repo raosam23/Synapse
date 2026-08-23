@@ -31,13 +31,6 @@ class LoginRequest(BaseModel):
     )
 
 
-class TokenResponse(BaseModel):
-    """Response schema for the token."""
-
-    access_token: str = Field(description="The access token for the user")
-    token_type: str = Field(description="The type of the token", default="bearer")
-
-
 class UserRead(BaseModel):
     """Response schema for the user."""
 

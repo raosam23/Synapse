@@ -11,7 +11,8 @@ There is no deadline for this
 You tell me what to do for a file/unit, give me hints, I will tell you if I understand what to do or not, and refine your hints or help me write that specific piece.
 If I don't understand at all, and if I give up at some point, I will tell you to make changes yourself, there you have full freedom to work on that file
 if I say fix it, do it yourself, do it for me, then you should do the changes yourself, otherwise keep giving me hints
-For terminal commands and setup steps, give me the commands to run, do not run them yourself unless I explicitly ask you to.
+YOU SHOULD NOT MAKE ANY CHANGES UNLESS AND UNTIL I SAY SO — this applies to everything, not just terminal commands: editing/writing any file (code, docs, config, migrations, AGENTS.md itself), running any command that mutates the database/filesystem/git history (`alembic upgrade`, `git commit`, `git push`, etc.), and anything else that changes the state of this repo or its infrastructure. Default to giving me hints, explanations, and commands to run myself. Read-only/inspection actions (reading files, `git status`, `git diff`, `git log`, checking CI status, etc.) are fine for you to do on your own. Only make a change directly yourself when I explicitly say so (e.g. "fix it", "do it for me", "do it yourself").
+For terminal commands and setup steps specifically: give me the commands to run, do not run them yourself unless I explicitly ask you to.
 You have full access to the entire codebase, both frontend and backend, please do not ask me to share the code, or ask me progress on any file/folder. You are free to scan the entire codebase for you analysis
 Help me write the code, that's it.
 
@@ -76,13 +77,14 @@ Status / sprint decisions that need “what happened in the real world” use **
 - **`User`** — a login identity (`email` + `password_hash`). Created via `/api/v1/auth/register`. Required to authenticate and to comment/act as a real person.
 - **`TeamMember`** — a roster entry on a project (`name` + `skills`), used for assignment. A `TeamMember` may optionally be linked to a `User` via `TeamMember.user_id`, but nothing currently sets that link automatically when a `TeamMember` is created or a `User` registers (tracked in [#43](https://github.com/raosam23/Synapse/issues/43)).
 
-Auth is JWT-based and stateless:
+Auth is JWT-based:
 
-- `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
-- All `team-members`, `tasks`, and `task-dependencies` endpoints require a valid `Authorization: Bearer <token>` header
+- `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me`
+- **Token transport: `httpOnly` cookie, not an `Authorization` header.** The server sets the JWT as an `httpOnly`, `SameSite=Lax` cookie on `register`/`login`; the browser attaches it automatically on every request. JavaScript (and the browser console) cannot read the cookie's value. This is a deliberate move away from returning the token in the response body, specifically to close the XSS-token-theft gap that a client-readable token (header/localStorage) has. Shipped in [#44](https://github.com/raosam23/Synapse/issues/44).
+- All `team-members`, `tasks`, and `task-dependencies` endpoints require this cookie to be present and valid
 - A task's `created_by_id` is always set server-side from the authenticated user — never accepted from the client
 - Assigning a task to a `TeamMember` who has no linked `User` is rejected (`409`) until #43 lands
-- **No server-side logout in v1.0.0** — tokens are stateless; the client just discards the token to "log out"
+- **Server-side logout** revokes the presented token via a `jti`-keyed blocklist (`RevokedToken` table, pruned once a row's own `expires_at` passes): `create_access_token` embeds a random `jti` claim per issued token; `logout` inserts that `jti` into the blocklist (a duplicate insert from calling `/logout` twice with the same token is caught and returns `401`, not a `500`); `get_current_user` checks the blocklist on every request, in addition to the existing signature/expiry check. Shipped in [#44](https://github.com/raosam23/Synapse/issues/44).
 
 ## Repository layout
 

@@ -9,6 +9,7 @@ import pytest
 from fastapi import HTTPException, status
 from fastapi.testclient import TestClient
 from jose import jwt
+from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 
 from app.api.routes.auth import get_me, login, register
@@ -60,6 +61,28 @@ async def test_register_success() -> None:
     stored_user: User = session.add.call_args[0][0]
     assert stored_user.password_hash != payload.password
     assert verify_password(payload.password, stored_user.password_hash)
+
+
+def test_password_too_short() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        RegisterRequest(
+            email="short.password@example.com",
+            password="it",
+            name="Short Password User",
+        )
+
+    assert exc_info.value.errors()[0]["type"] == "string_too_short"
+
+
+def test_password_too_long() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        RegisterRequest(
+            email="long.password@example.com",
+            password="abittoomanycharactersthatisgoingtobreakthecodeandthrowanvalidationerrorforsure",
+            name="Long Password User",
+        )
+
+    assert exc_info.value.errors()[0]["type"] == "string_too_long"
 
 
 @pytest.mark.asyncio

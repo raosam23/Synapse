@@ -8,10 +8,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from app.core.security import get_current_user
 from app.db.session import get_session
 from app.models import Task, TaskDependency, User
 from app.schemas.task_dependency import TaskDependencyCreate, TaskDependencyRead
-from app.core.security import get_current_user
 
 router = APIRouter()
 
@@ -126,7 +126,9 @@ async def get_task_dependency_by_id(
 
 
 @router.delete("/{task_dependency_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_task_dependency(task_dependency_id: UUID, session: Session, current_user: CurrentUser) -> None:
+async def delete_task_dependency(
+    task_dependency_id: UUID, session: Session, current_user: CurrentUser
+) -> None:
     """Delete a task dependency.
 
     Args:

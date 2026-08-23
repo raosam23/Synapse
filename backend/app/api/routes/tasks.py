@@ -10,11 +10,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from app.core.security import get_current_user
 from app.db.session import get_session
 from app.models import Task, TeamMember, User
 from app.models.task import TaskStatus
 from app.schemas.task import TaskCreate, TaskRead, TaskUpdate
-from app.core.security import get_current_user
 
 router = APIRouter()
 
@@ -41,7 +41,9 @@ async def _ensure_assignee_exists(session: AsyncSession, assignee_id: UUID) -> N
 
 
 @router.post("/", response_model=TaskRead, status_code=status.HTTP_201_CREATED)
-async def create_task(task: TaskCreate, session: Session, current_user: CurrentUser) -> TaskRead:
+async def create_task(
+    task: TaskCreate, session: Session, current_user: CurrentUser
+) -> TaskRead:
     """Endpoint to create a new task.
     Args:
         task: TaskCreate
@@ -93,7 +95,9 @@ async def get_all_tasks(
 
 
 @router.get("/{task_id}", response_model=TaskRead, status_code=status.HTTP_200_OK)
-async def get_task_by_id(task_id: UUID, session: Session, current_user: CurrentUser) -> TaskRead:
+async def get_task_by_id(
+    task_id: UUID, session: Session, current_user: CurrentUser
+) -> TaskRead:
     """Endpoint to get a task by its ID.
     Args:
         task_id: UUID
@@ -146,7 +150,9 @@ async def update_task(
 
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_task(task_id: UUID, session: Session, current_user: CurrentUser) -> None:
+async def delete_task(
+    task_id: UUID, session: Session, current_user: CurrentUser
+) -> None:
     """Endpoint to delete a task.
     Args:
         task_id: UUID

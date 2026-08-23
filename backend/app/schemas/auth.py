@@ -14,7 +14,8 @@ class RegisterRequest(BaseModel):
     )
     password: str = Field(
         min_length=8,
-        description="The password of the user. Must be at least 8 characters long.",
+        max_length=72,
+        description="The password of the user. Must be at least 8 characters long and less than 72 characters.",
     )
     name: str | None = Field(description="The name of the user", default=None)
 
@@ -25,7 +26,9 @@ class LoginRequest(BaseModel):
     email: EmailStr = Field(
         description="The email of the user. Must be a valid email address"
     )
-    password: str = Field(description="The password of the user")
+    password: str = Field(
+        description="The password of the user", min_length=8, max_length=72
+    )
 
 
 class TokenResponse(BaseModel):

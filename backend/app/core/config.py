@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str | None = None
 
     # JWT settings
-    SECRET_KEY: str = "your-very-secret-key"
+    SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     SALT_ROUNDS: int = 12

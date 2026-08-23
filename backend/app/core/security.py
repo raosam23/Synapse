@@ -96,4 +96,4 @@ async def get_current_user(credentials: Credentials, session: Session) -> User:
             raise credentials_exception
         return user
     except JWTError:
-        raise credentials_exception
+        raise credentials_exception from JWTError

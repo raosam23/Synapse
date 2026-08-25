@@ -176,7 +176,7 @@ cd frontend
 bun run lint
 ```
 
-CI runs lint, tests, and Docker image builds on PRs to `main`.
+CI runs lint, tests, and Docker image builds on PRs to `main`. The `test` job starts an ephemeral Postgres 15.4 service with throwaway credentials hardcoded in the workflow (not `.env` and not GitHub secrets), runs `alembic upgrade head`, then pytest. In CI the database host is `localhost`, not the Compose hostname `database`.
 
 ---
 

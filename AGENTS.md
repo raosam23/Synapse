@@ -77,14 +77,13 @@ Status / sprint decisions that need “what happened in the real world” use **
 - **`User`** — a login identity (`email` + `password_hash`). Created via `/api/v1/auth/register`. Required to authenticate and to comment/act as a real person.
 - **`TeamMember`** — a roster entry on a project (`name` + `skills`), used for assignment. A `TeamMember` may optionally be linked to a `User` via `TeamMember.user_id`, but nothing currently sets that link automatically when a `TeamMember` is created or a `User` registers (tracked in [#43](https://github.com/raosam23/Synapse/issues/43)).
 
-Auth is JWT-based:
+Auth is JWT-based and stateless:
 
-- `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me`
-- **Token transport: `httpOnly` cookie, not an `Authorization` header.** The server sets the JWT as an `httpOnly`, `SameSite=Lax` cookie on `register`/`login`; the browser attaches it automatically on every request. JavaScript (and the browser console) cannot read the cookie's value. This is a deliberate move away from returning the token in the response body, specifically to close the XSS-token-theft gap that a client-readable token (header/localStorage) has. Shipped in [#44](https://github.com/raosam23/Synapse/issues/44).
-- All `team-members`, `tasks`, and `task-dependencies` endpoints require this cookie to be present and valid
+- `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
+- All `team-members`, `tasks`, and `task-dependencies` endpoints require a valid `Authorization: Bearer <token>` header
 - A task's `created_by_id` is always set server-side from the authenticated user — never accepted from the client
 - Assigning a task to a `TeamMember` who has no linked `User` is rejected (`409`) until #43 lands
-- **Server-side logout** revokes the presented token via a `jti`-keyed blocklist (`RevokedToken` table, pruned once a row's own `expires_at` passes): `create_access_token` embeds a random `jti` claim per issued token; `logout` inserts that `jti` into the blocklist (a duplicate insert from calling `/logout` twice with the same token is caught and returns `401`, not a `500`); `get_current_user` checks the blocklist on every request, in addition to the existing signature/expiry check. Shipped in [#44](https://github.com/raosam23/Synapse/issues/44).
+- **No server-side logout in v1.0.0** — tokens are stateless; the client just discards the token to "log out"
 
 ## Repository layout
 

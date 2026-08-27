@@ -3,13 +3,12 @@
 from uuid import uuid4
 
 import pytest
-
-from app.models.user import User
-from app.main import app
 from fastapi.testclient import TestClient
-
 from sqlalchemy import create_engine, text
+
 from app.core.config import settings
+from app.main import app
+from app.models.user import User
 
 
 @pytest.fixture

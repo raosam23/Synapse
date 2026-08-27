@@ -148,6 +148,7 @@ def test_update_team_member_not_found(api_client: TestClient) -> None:
     )
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
+
 def test_delete_team_member(api_client: TestClient) -> None:
     _register_test_user(api_client)
     created = api_client.post(
@@ -168,10 +169,12 @@ def test_delete_team_member(api_client: TestClient) -> None:
     response = api_client.get(f"/api/v1/team-members/{member_id}")
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
+
 def test_delete_team_member_not_found(api_client: TestClient) -> None:
     _register_test_user(api_client)
     response = api_client.delete(f"/api/v1/team-members/{uuid4()}")
     assert response.status_code == status.HTTP_404_NOT_FOUND
+
 
 def test_delete_team_member_conflict(api_client: TestClient) -> None:
     register_response = _register_test_user(api_client)
@@ -180,7 +183,7 @@ def test_delete_team_member_conflict(api_client: TestClient) -> None:
         json={
             "name": "Roseanne Park",
             "skills": ["K-Pop", "Dancing", "Singing", "Rapping"],
-        }
+        },
     )
     assert created.status_code == status.HTTP_201_CREATED
     assert created.json()["name"] == "Roseanne Park"
@@ -198,10 +201,7 @@ def test_delete_team_member_conflict(api_client: TestClient) -> None:
 
 def test_update_team_member_validation_error(api_client: TestClient) -> None:
     _register_test_user(api_client)
-    response = api_client.put(
-        f"/api/v1/team-members/{uuid4()}",
-        json={"name": None}
-    )
+    response = api_client.put(f"/api/v1/team-members/{uuid4()}", json={"name": None})
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
 
@@ -212,16 +212,13 @@ def test_update_team_member_clears_skills(api_client: TestClient) -> None:
         json={
             "name": "Jisoo Kim",
             "skills": ["K-Pop", "Dancing", "Singing", "Rapping"],
-        }
+        },
     )
     assert created.status_code == status.HTTP_201_CREATED
     assert created.json()["name"] == "Jisoo Kim"
     assert created.json()["skills"] == ["K-Pop", "Dancing", "Singing", "Rapping"]
 
     member_id = created.json()["id"]
-    response = api_client.put(
-        f"/api/v1/team-members/{member_id}",
-        json={"skills": []}
-    )
+    response = api_client.put(f"/api/v1/team-members/{member_id}", json={"skills": []})
     assert response.status_code == status.HTTP_200_OK
     assert response.json()["skills"] == []

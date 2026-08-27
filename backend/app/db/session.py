@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
 
@@ -22,7 +23,11 @@ def _ensure_session_factory() -> async_sessionmaker[AsyncSession]:
         return AsyncSessionLocal
     if not settings.DATABASE_URL:
         raise RuntimeError("DATABASE_URL is not configured")
-    async_engine = create_async_engine(settings.DATABASE_URL, echo=True)
+    # NullPool: TestClient uses a new event loop per test; pooled asyncpg
+    # connections stay bound to the first loop and fail on the next test.
+    async_engine = create_async_engine(
+        settings.DATABASE_URL, echo=True, poolclass=NullPool
+    )
     AsyncSessionLocal = async_sessionmaker[AsyncSession](
         async_engine, expire_on_commit=False
     )

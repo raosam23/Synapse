@@ -5,6 +5,11 @@ from uuid import uuid4
 import pytest
 
 from app.models.user import User
+from app.main import app
+from fastapi.testclient import TestClient
+
+from sqlalchemy import create_engine, text
+from app.core.config import settings
 
 
 @pytest.fixture
@@ -17,3 +22,28 @@ def current_user() -> User:
         password_hash="not-a-real-hash",
         name="Test User",
     )
+
+
+def _truncate_api_tables() -> None:
+    if not settings.DATABASE_URL:
+        raise RuntimeError("DATABASE_URL is not configured")
+    sync_url = settings.DATABASE_URL.replace(
+        "postgresql+asyncpg://", "postgresql+psycopg://"
+    )
+    engine = create_engine(sync_url)
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                TRUNCATE TABLE task_dependencies, tasks, team_members, revoked_tokens, users
+                RESTART IDENTITY CASCADE;
+                """
+            )
+        )
+
+
+@pytest.fixture
+def api_client():
+    with TestClient(app) as test_client:
+        yield test_client
+    _truncate_api_tables()

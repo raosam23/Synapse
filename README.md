@@ -111,32 +111,34 @@ docker compose exec backend uv run alembic upgrade head
 
 ## Authentication
 
-All `team-members`, `tasks`, and `task-dependencies` endpoints require a valid JWT `Authorization` header. Register and log in first:
+Auth is a JWT stored in an httpOnly cookie named `access_token` (`samesite=lax`). Register and login set the cookie and return the user object only — the token is **not** in the JSON body. `team-members`, `tasks`, `task-dependencies`, and `GET /api/v1/auth/me` all require that cookie.
 
 ```bash
-# 1. Register a user
-curl -X POST http://localhost:8000/api/v1/auth/register \
+# Cookie jar so later requests send access_token
+# 1. Register (201 + Set-Cookie; you are already logged in)
+curl -c cookies.txt -X POST http://localhost:8000/api/v1/auth/register \
   -H "Content-Type: application/json" \
   -d '{"email": "jennie@example.com", "password": "supersecret123", "name": "Jennie"}'
+# -> {"id": "...", "email": "jennie@example.com", "name": "Jennie", "created_at": "..."}
 
-# 2. Log in to get an access token
-curl -X POST http://localhost:8000/api/v1/auth/login \
+# 2. Or log in (200 + Set-Cookie) if you already have an account
+curl -c cookies.txt -X POST http://localhost:8000/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email": "jennie@example.com", "password": "supersecret123"}'
-# -> {"access_token": "<jwt>", "token_type": "bearer"}
 
-# 3. Call a protected endpoint with the token
-curl http://localhost:8000/api/v1/tasks/ \
-  -H "Authorization: Bearer <jwt>"
+# 3. Call a protected endpoint (send the cookie)
+curl -b cookies.txt http://localhost:8000/api/v1/tasks/
 
 # Check who you're logged in as
-curl http://localhost:8000/api/v1/auth/me \
-  -H "Authorization: Bearer <jwt>"
+curl -b cookies.txt http://localhost:8000/api/v1/auth/me
+
+# Log out: revoke the JWT (jti is stored in revoked_tokens) and clear the cookie
+curl -b cookies.txt -c cookies.txt -X POST http://localhost:8000/api/v1/auth/logout
 ```
 
-In [Swagger UI](http://localhost:8000/docs), use the **Authorize** button (top right) and paste just the raw token — Swagger adds the `Bearer ` prefix for you.
+In [Swagger UI](http://localhost:8000/docs), call **register** or **login** from the browser first. The browser stores `access_token`; later **Try it out** requests on the same origin send it automatically. The **Authorize** button (Bearer header) does nothing for this API — there is no `Authorization` header.
 
-Tokens expire after `ACCESS_TOKEN_EXPIRE_MINUTES` (see `.env.example`). There is no server-side logout endpoint in v1.0.0 — auth is stateless, so "logging out" just means discarding the token on the client.
+Tokens expire after `ACCESS_TOKEN_EXPIRE_MINUTES` (see `.env.example`). Logout is `POST /api/v1/auth/logout`: the server blocklists the token and deletes the cookie. A revoked token is rejected even if you still have the cookie value.
 
 ---
 

@@ -44,4 +44,6 @@ class TeamMemberRead(BaseModel):
     id: UUID = Field(description="The id of the team member.")
     name: str = Field(description="The name of the team member.")
     skills: list[str] = Field(description="The list of skills of the team member.")
-    user_id: UUID = Field(description="The id of the person who is a team member.")
+    user_id: UUID | None = Field(
+        description="The id of the person who is a team member.", default=None
+    )

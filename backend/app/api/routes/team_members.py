@@ -58,8 +58,14 @@ async def create_team_member(
         skills=team_member.skills,
         user_id=team_member.user_id,
     )
-    session.add(db_team_member)
-    await session.commit()
+    try:
+        session.add(db_team_member)
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Team member already exists"
+        ) from exc
     await session.refresh(db_team_member)
     return TeamMemberRead.model_validate(db_team_member)
 

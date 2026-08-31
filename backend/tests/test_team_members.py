@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
 
 from app.api.routes.team_members import (
     create_team_member,
@@ -117,6 +118,33 @@ async def test_create_team_member_duplicate_user_returns_409(
 
 
 @pytest.mark.asyncio
+async def test_create_team_member_integrity_error_returns_409(
+    current_user: User,
+) -> None:
+    payload = TeamMemberCreate(
+        name="Race Condition Member",
+        skills=["SQL"],
+        user_id=current_user.id,
+    )
+    session = AsyncMock()
+    session.add = MagicMock()
+    session.commit = AsyncMock(side_effect=IntegrityError("", "", Exception()))
+    session.rollback = AsyncMock()
+    session.execute = AsyncMock(
+        side_effect=[
+            _execute_result(scalar=current_user),
+            _execute_result(scalar=None),
+        ]
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await create_team_member(payload, session, current_user)
+
+    assert exc_info.value.status_code == status.HTTP_409_CONFLICT
+    session.rollback.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_get_team_member_by_id_success(current_user: User) -> None:
     member_id = uuid4()
     db_member = TeamMember(
@@ -135,6 +163,26 @@ async def test_get_team_member_by_id_success(current_user: User) -> None:
     assert result.name == "Ada Lovelace"
     assert result.skills == ["Python", "SQL", "Docker"]
     assert result.user_id == current_user.id
+
+
+@pytest.mark.asyncio
+async def test_get_team_member_by_id_allows_legacy_unlinked_member(
+    current_user: User,
+) -> None:
+    member_id = uuid4()
+    db_member = TeamMember(
+        id=member_id,
+        name="Legacy Member",
+        skills=["Python"],
+    )
+    session = AsyncMock()
+    session.execute = AsyncMock(return_value=_execute_result(scalar=db_member))
+
+    result = await get_team_member(member_id, session, current_user)
+
+    assert result.id == member_id
+    assert result.name == "Legacy Member"
+    assert result.user_id is None
 
 
 @pytest.mark.asyncio

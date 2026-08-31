@@ -77,13 +77,14 @@ Status / sprint decisions that need “what happened in the real world” use **
 - **`User`** — a login identity (`email` + `password_hash`). Created via `/api/v1/auth/register`. Required to authenticate and to comment/act as a real person.
 - **`TeamMember`** — a roster entry on a project (`name` + `skills`), used for assignment. In v1, every `TeamMember` must be linked to an existing `User` via `TeamMember.user_id`; a person must have a Synapse account before they can be added to the team or assigned work (tracked in [#50](https://github.com/raosam23/Synapse/issues/50)).
 
-Auth is JWT-based and stateless:
+Auth is JWT in an httpOnly `access_token` cookie (not an `Authorization` header):
 
-- `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
-- All `team-members`, `tasks`, and `task-dependencies` endpoints require a valid `Authorization: Bearer <token>` header
+- `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me`
+- Register and login set the cookie (`httponly`, `samesite=lax`) and return the user JSON only — the JWT is not in the response body
+- All `team-members`, `tasks`, `task-dependencies`, and `GET /auth/me` endpoints require a valid `access_token` cookie
 - A task's `created_by_id` is always set server-side from the authenticated user — never accepted from the client
 - Creating a `TeamMember` requires an existing linked `User`; assigning a task to an unlinked `TeamMember` is rejected (`409`)
-- **No server-side logout in v1.0.0** — tokens are stateless; the client just discards the token to "log out"
+- `POST /api/v1/auth/logout` revokes the token's `jti` (`RevokedToken` blocklist) and clears the cookie. A revoked JWT is rejected even if the cookie is still present.
 
 ## Repository layout
 

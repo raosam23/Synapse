@@ -34,12 +34,38 @@ async def create_team_member(
     Returns:
         TeamMemberRead
     """
+    user_proxy = await session.execute(
+        select(User).where(User.id == team_member.user_id)
+    )
+    user = user_proxy.scalar_one_or_none()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+
+    team_member_proxy = await session.execute(
+        select(TeamMember).where(TeamMember.user_id == team_member.user_id)
+    )
+    team_member_db = team_member_proxy.scalar_one_or_none()
+
+    if team_member_db:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Team member already exists"
+        )
+
     db_team_member = TeamMember(
         name=team_member.name,
         skills=team_member.skills,
+        user_id=team_member.user_id,
     )
-    session.add(db_team_member)
-    await session.commit()
+    try:
+        session.add(db_team_member)
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Team member already exists"
+        ) from exc
     await session.refresh(db_team_member)
     return TeamMemberRead.model_validate(db_team_member)
 

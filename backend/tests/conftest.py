@@ -37,7 +37,7 @@ def _truncate_api_tables() -> None:
         conn.execute(
             text(
                 """
-                TRUNCATE TABLE task_dependencies, tasks, team_members, revoked_tokens, users
+                TRUNCATE TABLE task_dependencies, tasks, team_members, projects, revoked_tokens, users
                 RESTART IDENTITY CASCADE;
                 """
             )

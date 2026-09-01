@@ -111,7 +111,7 @@ docker compose exec backend uv run alembic upgrade head
 
 ## Authentication
 
-Auth is a JWT stored in an httpOnly cookie named `access_token` (`samesite=lax`). Register and login set the cookie and return the user object only — the token is **not** in the JSON body. `team-members`, `tasks`, `task-dependencies`, and `GET /api/v1/auth/me` all require that cookie.
+Auth is a JWT stored in an httpOnly cookie named `access_token` (`samesite=lax`). Register and login set the cookie and return the user object only — the token is **not** in the JSON body. `projects`, `team-members`, `tasks`, `task-dependencies`, and `GET /api/v1/auth/me` all require that cookie.
 
 ```bash
 # Cookie jar so later requests send access_token
@@ -184,6 +184,6 @@ CI runs lint, tests, and Docker image builds on PRs to `main`. The `test` job st
 
 ## Current status
 
-Early **v1.0.0** build-out: Postgres + SQLModel/Alembic are wired; initial schema (`team_members`, `tasks`, `task_dependencies`) is in place. CRUD APIs, agents, and the Kanban UI come next.
+Early **v1.0.0** build-out: Postgres + SQLModel/Alembic are wired; schema includes `users`, `projects`, `team_members`, `tasks`, and `task_dependencies`. Cookie-auth CRUD exists for projects, team members, tasks, and task dependencies. Agents and the Kanban UI come next.
 
 See [`AGENTS.md`](./AGENTS.md) for scope, task statuses, and agent roles.

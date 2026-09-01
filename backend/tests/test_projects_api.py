@@ -168,6 +168,15 @@ def test_update_project_validation_error(api_client: TestClient) -> None:
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
 
+def test_update_project_rejects_null_duration_weeks(api_client: TestClient) -> None:
+    _register_test_user(api_client)
+    response = api_client.put(
+        f"/api/v1/projects/{uuid4()}",
+        json={"duration_weeks": None},
+    )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+
 def test_delete_project(api_client: TestClient) -> None:
     _register_test_user(api_client)
     created = _create_project(api_client, name="Jennie Kim")

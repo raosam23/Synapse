@@ -157,9 +157,7 @@ async def test_update_project_not_found(current_user: User) -> None:
     session.execute = AsyncMock(return_value=_execute_result(scalar=None))
 
     with pytest.raises(HTTPException) as exc_info:
-        await update_project(
-            uuid4(), ProjectUpdate(name="Nope"), session, current_user
-        )
+        await update_project(uuid4(), ProjectUpdate(name="Nope"), session, current_user)
 
     assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
     session.commit.assert_not_called()
@@ -216,6 +214,11 @@ def test_project_update_rejects_null_name() -> None:
 def test_project_update_rejects_null_requirements() -> None:
     with pytest.raises(ValidationError):
         ProjectUpdate.model_validate({"requirements": None})
+
+
+def test_project_update_rejects_null_duration_weeks() -> None:
+    with pytest.raises(ValidationError):
+        ProjectUpdate.model_validate({"duration_weeks": None})
 
 
 def test_project_update_allows_omitted_fields() -> None:

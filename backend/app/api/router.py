@@ -4,10 +4,10 @@ from fastapi import APIRouter
 
 from app.api.routes import (
     AuthRouter,
+    ProjectsRouter,
     TaskDependenciesRouter,
     TaskRouter,
     TeamMembersRouter,
-    ProjectsRouter,
 )
 
 router = APIRouter(prefix="/api/v1")

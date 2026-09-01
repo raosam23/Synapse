@@ -77,10 +77,10 @@ class ProjectUpdate(BaseModel):
         description="the ai opinion of the project to update.", default=None
     )
 
-    @field_validator("requirements", "status", "name", mode="before")
+    @field_validator("requirements", "status", "name", "duration_weeks", mode="before")
     @classmethod
     def reject_null(cls, value: Any) -> Any:
-        """Reject null values for the requirements, status and name fields."""
+        """Reject null values for the requirements, status, name and duration_weeks fields."""
         if value is None:
             raise ValueError(
                 "Null is not allowed, omit the field to leave it unchanged"

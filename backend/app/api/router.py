@@ -7,6 +7,7 @@ from app.api.routes import (
     TaskDependenciesRouter,
     TaskRouter,
     TeamMembersRouter,
+    ProjectsRouter,
 )
 
 router = APIRouter(prefix="/api/v1")
@@ -16,3 +17,4 @@ router.include_router(
     TaskDependenciesRouter, prefix="/task-dependencies", tags=["Task Dependencies"]
 )
 router.include_router(AuthRouter, prefix="/auth", tags=["Auth"])
+router.include_router(ProjectsRouter, prefix="/projects", tags=["Projects"])

@@ -81,7 +81,7 @@ Auth is JWT in an httpOnly `access_token` cookie (not an `Authorization` header)
 
 - `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me`
 - Register and login set the cookie (`httponly`, `samesite=lax`) and return the user JSON only — the JWT is not in the response body
-- All `team-members`, `tasks`, `task-dependencies`, and `GET /auth/me` endpoints require a valid `access_token` cookie
+- All `projects`, `team-members`, `tasks`, `task-dependencies`, and `GET /auth/me` endpoints require a valid `access_token` cookie
 - A task's `created_by_id` is always set server-side from the authenticated user — never accepted from the client
 - Creating a `TeamMember` requires an existing linked `User`; assigning a task to an unlinked `TeamMember` is rejected (`409`)
 - `POST /api/v1/auth/logout` revokes the token's `jti` (`RevokedToken` blocklist) and clears the cookie. A revoked JWT is rejected even if the cookie is still present.
@@ -143,14 +143,14 @@ Keep models minimal; add only what the flow above needs.
 | Entity | Purpose (high level) |
 |--------|----------------------|
 | `User` | Logged-in identity for auth, comments / authorship (`email` + `password_hash`) |
-| `Project` | Requirements text, duration, AI opinion/analysis, fixed sprint length (2 weeks), project status |
+| `Project` | Name, requirements text, duration, AI opinion/analysis, fixed sprint length (2 weeks), project status |
 | `TeamMember` | Belongs to a project; name + skills; required `user_id` link to an existing `User` |
 | `Sprint` | Belongs to a project; ordered 2-week window (`start_date` / `end_date`) |
 | `Task` | Belongs to a project; `status`; optional `assignee_id`; optional `sprint_id` (null while backlog); story points / effort; risk flag; `created_by_id` (the `User` who created it) |
 | `TaskDependency` | Optional `from_task` → `to_task` edges |
 | `Comment` | Belongs to a task; body; author (user and/or AI); timestamps |
 
-**Schema progress:** `User`, `TeamMember`, `Task`, and `TaskDependency` are migrated (including `Task.created_by_id` and `TeamMember.user_id`). Add `Project`, `Sprint`, and `Comment` in follow-up tickets — keep designing FKs with that target in mind (e.g. `project_id` / `sprint_id` on `Task`).
+**Schema progress:** `User`, `TeamMember`, `Task`, `TaskDependency`, and `Project` are migrated (including `Task.created_by_id` and `TeamMember.user_id`). Add `Sprint` and `Comment` in follow-up tickets. `TeamMember` and `Task` still have no `project_id` — keep designing FKs with that target in mind (e.g. `project_id` / `sprint_id` on `Task`).
 
 ## Local development
 

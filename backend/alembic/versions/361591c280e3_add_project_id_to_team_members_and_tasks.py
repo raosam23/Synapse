@@ -75,11 +75,16 @@ def upgrade() -> None:
     )
     op.execute(
         """
-        UPDATE tasks
+        UPDATE tasks AS t
         SET assignee_id = NULL
-        WHERE assignee_id IN (
-            SELECT id FROM team_members WHERE project_id IS NULL
-        )
+        WHERE t.assignee_id IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM team_members AS tm
+            WHERE tm.id = t.assignee_id
+              AND tm.project_id IS NOT NULL
+              AND tm.project_id = t.project_id
+          )
         """
     )
     op.execute("DELETE FROM tasks WHERE project_id IS NULL")

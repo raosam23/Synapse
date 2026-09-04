@@ -26,9 +26,9 @@ def _execute_result(*, scalar: object) -> MagicMock:
     return result
 
 
-def _scalars_result(*, scalars: list[object]) -> MagicMock:
+def _rows_result(rows: list[tuple[object, object]]) -> MagicMock:
     result = MagicMock()
-    result.scalars.return_value.all.return_value = scalars
+    result.all.return_value = rows
     return result
 
 
@@ -47,7 +47,6 @@ def _project(
 def _member(*, user_id: UUID, project_id: UUID, **overrides: object) -> TeamMember:
     values = {
         "id": uuid4(),
-        "name": "Ada Lovelace",
         "skills": ["Python"],
         "user_id": user_id,
         "project_id": project_id,
@@ -56,12 +55,20 @@ def _member(*, user_id: UUID, project_id: UUID, **overrides: object) -> TeamMemb
     return TeamMember(**values)
 
 
+def _linked_user(member: TeamMember, *, name: str | None, email: str) -> User:
+    return User(
+        id=member.user_id,
+        email=email,
+        password_hash="not-a-real-hash",
+        name=name,
+    )
+
+
 @pytest.mark.asyncio
 async def test_create_team_member_success(current_user: User) -> None:
     """Test creating a team member successfully"""
     project = _project(owner_id=current_user.id)
     payload = TeamMemberCreate(
-        name="John Doe",
         skills=["Python", "SQL", "Docker"],
         user_id=current_user.id,
         project_id=project.id,
@@ -92,10 +99,43 @@ async def test_create_team_member_success(current_user: User) -> None:
     session.commit.assert_awaited_once()
     assert isinstance(result, TeamMemberRead)
     assert result.id == created_id
-    assert result.name == "John Doe"
+    assert result.name == current_user.name
     assert result.skills == ["Python", "SQL", "Docker"]
     assert result.user_id == current_user.id
     assert result.project_id == project.id
+
+
+@pytest.mark.asyncio
+async def test_create_team_member_display_name_falls_back_to_email(
+    current_user: User,
+) -> None:
+    nameless = User(
+        id=uuid4(),
+        email="no.name@example.com",
+        password_hash="not-a-real-hash",
+        name=None,
+    )
+    project = _project(owner_id=current_user.id)
+    payload = TeamMemberCreate(
+        skills=["Python"],
+        user_id=nameless.id,
+        project_id=project.id,
+    )
+    session = AsyncMock()
+    session.add = MagicMock()
+    session.commit = AsyncMock()
+    session.refresh = AsyncMock()
+    session.execute = AsyncMock(
+        side_effect=[
+            _execute_result(scalar=nameless),
+            _execute_result(scalar=project),
+            _execute_result(scalar=None),
+        ]
+    )
+
+    result = await create_team_member(payload, session, current_user)
+
+    assert result.name == "no.name@example.com"
 
 
 @pytest.mark.asyncio
@@ -103,7 +143,6 @@ async def test_create_team_member_missing_user_returns_404(
     current_user: User,
 ) -> None:
     payload = TeamMemberCreate(
-        name="Missing User",
         skills=["Python"],
         user_id=uuid4(),
         project_id=uuid4(),
@@ -126,7 +165,6 @@ async def test_create_team_member_missing_project_returns_404(
     current_user: User,
 ) -> None:
     payload = TeamMemberCreate(
-        name="No Project",
         skills=["Python"],
         user_id=current_user.id,
         project_id=uuid4(),
@@ -157,11 +195,9 @@ async def test_create_team_member_duplicate_user_returns_409(
     existing_team_member = _member(
         user_id=current_user.id,
         project_id=project.id,
-        name="Existing Member",
         skills=["Python"],
     )
     payload = TeamMemberCreate(
-        name="Duplicate Member",
         skills=["SQL"],
         user_id=current_user.id,
         project_id=project.id,
@@ -191,7 +227,6 @@ async def test_create_team_member_integrity_error_returns_409(
 ) -> None:
     project = _project(owner_id=current_user.id)
     payload = TeamMemberCreate(
-        name="Race Condition Member",
         skills=["SQL"],
         user_id=current_user.id,
         project_id=project.id,
@@ -223,24 +258,28 @@ async def test_get_team_member_by_id_success(current_user: User) -> None:
         user_id=current_user.id,
         project_id=project_id,
         id=member_id,
-        name="Ada Lovelace",
         skills=["Python", "SQL", "Docker"],
     )
     session = AsyncMock()
-    session.execute = AsyncMock(return_value=_execute_result(scalar=db_member))
+    session.execute = AsyncMock(
+        side_effect=[
+            _execute_result(scalar=db_member),
+            _execute_result(scalar=current_user),
+        ]
+    )
 
     result = await get_team_member(member_id, session, current_user)
 
-    session.execute.assert_awaited_once()
+    assert session.execute.await_count == 2
     assert result.id == member_id
-    assert result.name == "Ada Lovelace"
+    assert result.name == current_user.name
     assert result.skills == ["Python", "SQL", "Docker"]
     assert result.user_id == current_user.id
     assert result.project_id == project_id
 
 
 @pytest.mark.asyncio
-async def test_get_team_member_by_id_allows_legacy_unlinked_member(
+async def test_get_team_member_by_id_missing_user_returns_404(
     current_user: User,
 ) -> None:
     project_id = uuid4()
@@ -249,19 +288,20 @@ async def test_get_team_member_by_id_allows_legacy_unlinked_member(
         user_id=current_user.id,
         project_id=project_id,
         id=member_id,
-        name="Legacy Member",
         skills=["Python"],
     )
-    db_member.user_id = None
     session = AsyncMock()
-    session.execute = AsyncMock(return_value=_execute_result(scalar=db_member))
+    session.execute = AsyncMock(
+        side_effect=[
+            _execute_result(scalar=db_member),
+            _execute_result(scalar=None),
+        ]
+    )
 
-    result = await get_team_member(member_id, session, current_user)
+    with pytest.raises(HTTPException) as exc_info:
+        await get_team_member(member_id, session, current_user)
 
-    assert result.id == member_id
-    assert result.name == "Legacy Member"
-    assert result.user_id is None
-    assert result.project_id == project_id
+    assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
 
 
 @pytest.mark.asyncio
@@ -277,36 +317,36 @@ async def test_get_team_member_by_id_not_found(current_user: User) -> None:
 @pytest.mark.asyncio
 async def test_get_team_members_success(current_user: User) -> None:
     project_id = uuid4()
-    db_members = [
-        _member(
-            user_id=uuid4(),
-            project_id=project_id,
-            name="Ada Lovelace",
-            skills=["Python", "SQL", "Docker"],
-        ),
-        _member(
-            user_id=uuid4(),
-            project_id=project_id,
-            name="Grace Hopper",
-            skills=["Assembly", "COBOL"],
-        ),
-    ]
+    ada = _member(
+        user_id=uuid4(),
+        project_id=project_id,
+        skills=["Python", "SQL", "Docker"],
+    )
+    grace = _member(
+        user_id=uuid4(),
+        project_id=project_id,
+        skills=["Assembly", "COBOL"],
+    )
+    ada_user = _linked_user(ada, name="Ada Lovelace", email="ada@example.com")
+    grace_user = _linked_user(grace, name="Grace Hopper", email="grace@example.com")
     session = AsyncMock()
-    session.execute = AsyncMock(return_value=_scalars_result(scalars=db_members))
+    session.execute = AsyncMock(
+        return_value=_rows_result([(ada, ada_user), (grace, grace_user)])
+    )
 
     result = await get_team_members(session, current_user)
 
     session.execute.assert_awaited_once()
     assert len(result) == 2
-    assert result[0].id == db_members[0].id
-    assert result[0].name == db_members[0].name
-    assert result[0].skills == db_members[0].skills
-    assert result[0].user_id == db_members[0].user_id
+    assert result[0].id == ada.id
+    assert result[0].name == "Ada Lovelace"
+    assert result[0].skills == ada.skills
+    assert result[0].user_id == ada.user_id
     assert result[0].project_id == project_id
-    assert result[1].id == db_members[1].id
-    assert result[1].name == db_members[1].name
-    assert result[1].skills == db_members[1].skills
-    assert result[1].user_id == db_members[1].user_id
+    assert result[1].id == grace.id
+    assert result[1].name == "Grace Hopper"
+    assert result[1].skills == grace.skills
+    assert result[1].user_id == grace.user_id
 
 
 @pytest.mark.asyncio
@@ -317,26 +357,28 @@ async def test_update_team_member_success(current_user: User) -> None:
         user_id=current_user.id,
         project_id=project_id,
         id=member_id,
-        name="Alan Turing",
         skills=["Python", "SQL", "Docker"],
     )
     session = AsyncMock()
     session.add = MagicMock()
     session.commit = AsyncMock()
     session.refresh = AsyncMock()
-    session.execute = AsyncMock(return_value=_execute_result(scalar=db_member))
-
-    payload = TeamMemberUpdate(
-        name="Alan Mathison Turing",
+    session.execute = AsyncMock(
+        side_effect=[
+            _execute_result(scalar=db_member),
+            _execute_result(scalar=current_user),
+        ]
     )
+
+    payload = TeamMemberUpdate(skills=["Math"])
     result = await update_team_member(member_id, payload, session, current_user)
 
-    assert db_member.name == "Alan Mathison Turing"
+    assert db_member.skills == ["Math"]
     session.add.assert_called_once_with(db_member)
     session.commit.assert_awaited_once()
     session.refresh.assert_awaited_once()
-    assert result.name == "Alan Mathison Turing"
-    assert result.skills == db_member.skills
+    assert result.name == current_user.name
+    assert result.skills == ["Math"]
     assert result.id == member_id
     assert result.user_id == current_user.id
     assert result.project_id == project_id
@@ -349,7 +391,7 @@ async def test_update_team_member_not_found(current_user: User) -> None:
 
     with pytest.raises(HTTPException) as exc_info:
         await update_team_member(
-            uuid4(), TeamMemberUpdate(name="Nope"), session, current_user
+            uuid4(), TeamMemberUpdate(skills=["Nope"]), session, current_user
         )
 
     assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
@@ -375,7 +417,6 @@ async def test_delete_team_member_conflict_when_assigned(current_user: User) -> 
         user_id=current_user.id,
         project_id=uuid4(),
         id=member_id,
-        name="Ada Lovelace",
         skills=[],
     )
 
@@ -401,7 +442,6 @@ async def test_delete_team_member_success(current_user: User) -> None:
         user_id=current_user.id,
         project_id=uuid4(),
         id=member_id,
-        name="Ada Lovelace",
         skills=["Python", "SQL", "Docker"],
     )
     session = AsyncMock()

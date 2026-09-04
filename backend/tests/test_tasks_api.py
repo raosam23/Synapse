@@ -45,7 +45,6 @@ def _create_project(
 def _create_team_member(
     api_client: TestClient,
     *,
-    name: str,
     skills: list[str],
     user_id: str,
     project_id: str,
@@ -53,7 +52,6 @@ def _create_team_member(
     response = api_client.post(
         "/api/v1/team-members/",
         json={
-            "name": name,
             "skills": skills,
             "user_id": user_id,
             "project_id": project_id,
@@ -103,7 +101,6 @@ def test_create_task_assignee_on_other_project_returns_409(
     project_b = _create_project(api_client, name="Project B")
     member_on_b = _create_team_member(
         api_client,
-        name="On Project B",
         skills=["Python"],
         user_id=user["id"],
         project_id=project_b["id"],

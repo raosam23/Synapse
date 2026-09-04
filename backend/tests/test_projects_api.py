@@ -203,7 +203,6 @@ def test_delete_project_conflict_when_it_has_team_members(
     member_response = api_client.post(
         "/api/v1/team-members/",
         json={
-            "name": "Ada Lovelace",
             "skills": ["Python"],
             "user_id": user["id"],
             "project_id": created["id"],

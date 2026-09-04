@@ -184,6 +184,6 @@ CI runs lint, tests, and Docker image builds on PRs to `main`. The `test` job st
 
 ## Current status
 
-Early **v1.0.0** build-out: schema includes `users`, `projects`, `team_members`, `tasks`, and `task_dependencies`. Team members and tasks belong to a project (`project_id`); list them with `?project_id=`. Cookie-auth CRUD exists for projects, team members, tasks, and task dependencies. Sprints, comments, agents, and the Kanban UI come next.
+Early **v1.0.0** build-out: schema includes `users`, `projects`, `team_members`, `tasks`, and `task_dependencies`. Team members and tasks belong to a project (`project_id`); list them with `?project_id=`. A team member’s display name is the linked user’s name, or their email if name is missing. Cookie-auth CRUD exists for projects, team members, tasks, and task dependencies. Sprints, comments, agents, and the Kanban UI come next.
 
 See [`AGENTS.md`](./AGENTS.md) for scope, task statuses, and agent roles.

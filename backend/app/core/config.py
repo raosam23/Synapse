@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     # Optional at import time so app.main (and test_health) can load without CI/.env.
     # Required before any DB access — see app.db.session.
     DATABASE_URL: str | None = None
+    # Pytest only. Local uvicorn keeps DATABASE_URL (synapse_db); CI omits this
+    # and uses DATABASE_URL (synapse_ci). See backend/tests/conftest.py.
+    TEST_DATABASE_URL: str | None = None
 
     # JWT settings
     SECRET_KEY: str

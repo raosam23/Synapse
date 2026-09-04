@@ -163,7 +163,13 @@ cp .env.example .env
 docker compose up database -d
 ```
 
-`.env` is gitignored. Host apps use `DATABASE_URL` with `postgresql+asyncpg://…@localhost:5432/…` (see `.env.example`). Compose backend uses hostname `database` instead of `localhost`.
+`.env` is gitignored. Host apps use `DATABASE_URL` with `postgresql+asyncpg://…@localhost:5432/…` (see `.env.example`) — that is **`synapse_db`** for uvicorn / Swagger. Pytest uses **`TEST_DATABASE_URL`** → **`synapse_test`** on the same Postgres instance and truncates only that database. CI uses an ephemeral **`synapse_ci`**. Compose backend uses hostname `database` instead of `localhost`.
+
+A new Postgres volume creates `synapse_test` via `docker/postgres/init/`. Existing volumes:
+
+```bash
+docker compose exec database psql -U "$POSTGRES_USER" -c "CREATE DATABASE synapse_test;"
+```
 
 ### Backend
 

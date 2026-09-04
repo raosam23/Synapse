@@ -3,14 +3,14 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.core.security import get_current_user
 from app.db.session import get_session
-from app.models import User
+from app.models import Project, User
 from app.models.task import Task
 from app.models.team_member import TeamMember
 from app.schemas.team_member import TeamMemberCreate, TeamMemberRead, TeamMemberUpdate
@@ -43,20 +43,34 @@ async def create_team_member(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
+    project_proxy = await session.execute(
+        select(Project).where(Project.id == team_member.project_id)
+    )
+    project = project_proxy.scalar_one_or_none()
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found",
+        )
     team_member_proxy = await session.execute(
-        select(TeamMember).where(TeamMember.user_id == team_member.user_id)
+        select(TeamMember).where(
+            TeamMember.user_id == team_member.user_id,
+            TeamMember.project_id == team_member.project_id,
+        )
     )
     team_member_db = team_member_proxy.scalar_one_or_none()
 
     if team_member_db:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Team member already exists"
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Team member for this project already exists",
         )
 
     db_team_member = TeamMember(
         name=team_member.name,
         skills=team_member.skills,
         user_id=team_member.user_id,
+        project_id=team_member.project_id,
     )
     try:
         session.add(db_team_member)
@@ -72,17 +86,24 @@ async def create_team_member(
 
 @router.get("/", response_model=list[TeamMemberRead], status_code=status.HTTP_200_OK)
 async def get_team_members(
-    session: Session, current_user: CurrentUser
+    session: Session,
+    current_user: CurrentUser,
+    project_id_filter: Annotated[UUID | None, Query(alias="project_id")] = None,
 ) -> list[TeamMemberRead]:
     """
     Get all team members
     Args:
         session: Session
         current_user: CurrentUser
+        project_id_filter: Annotated[UUID | None, Query(alias="project_id")] = None
     Returns:
         list[TeamMemberRead]
     """
-    result_proxy = await session.execute(select(TeamMember).order_by(TeamMember.name))
+    statement = select(TeamMember)
+    if project_id_filter is not None:
+        statement = statement.where(TeamMember.project_id == project_id_filter)
+    statement = statement.order_by(TeamMember.name)
+    result_proxy = await session.execute(statement)
     team_members = result_proxy.scalars().all()
     return [TeamMemberRead.model_validate(team_member) for team_member in team_members]
 

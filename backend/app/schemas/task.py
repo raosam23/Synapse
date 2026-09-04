@@ -30,6 +30,7 @@ class TaskCreate(BaseModel):
     risk_flag: bool | None = Field(
         description="The risk flag of the task", default=None
     )
+    project_id: UUID = Field(description="The id of the project the task is part of.")
 
 
 class TaskRead(BaseModel):
@@ -58,6 +59,7 @@ class TaskRead(BaseModel):
     created_by_id: UUID | None = Field(
         description="The id of the user who created this task.", default=None
     )
+    project_id: UUID = Field(description="The id of the project the task is a part of.")
 
 
 class TaskUpdate(BaseModel):

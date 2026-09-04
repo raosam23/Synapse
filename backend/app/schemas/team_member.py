@@ -14,6 +14,9 @@ class TeamMemberCreate(BaseModel):
         description="The skills of the team member.", default_factory=list
     )
     user_id: UUID = Field(description="The id of the person who is a team member.")
+    project_id: UUID = Field(
+        description="The id of the project the team member is part of."
+    )
 
 
 class TeamMemberUpdate(BaseModel):
@@ -46,4 +49,7 @@ class TeamMemberRead(BaseModel):
     skills: list[str] = Field(description="The list of skills of the team member.")
     user_id: UUID | None = Field(
         description="The id of the person who is a team member.", default=None
+    )
+    project_id: UUID = Field(
+        description="The id of the project the team member is a part of."
     )

@@ -56,6 +56,7 @@ jobs:
         working-directory: backend
         env:
           SECRET_KEY: your-super-safe-secret-key-for-testing-purposes-only
+          # Ephemeral CI DB. Local pytest uses TEST_DATABASE_URL → synapse_test instead.
           DATABASE_URL: postgresql+asyncpg://user_ci:password_ci@localhost:5432/synapse_ci
         run: |
           uv sync --dev

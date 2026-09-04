@@ -67,7 +67,6 @@ async def create_team_member(
         )
 
     db_team_member = TeamMember(
-        name=team_member.name,
         skills=team_member.skills,
         user_id=team_member.user_id,
         project_id=team_member.project_id,
@@ -81,7 +80,12 @@ async def create_team_member(
             status_code=status.HTTP_409_CONFLICT, detail="Team member already exists"
         ) from exc
     await session.refresh(db_team_member)
-    return TeamMemberRead.model_validate(db_team_member)
+    return TeamMemberRead.model_validate(
+        {
+            **db_team_member.model_dump(),
+            "name": user.name or user.email,
+        }
+    )
 
 
 @router.get("/", response_model=list[TeamMemberRead], status_code=status.HTTP_200_OK)
@@ -99,13 +103,24 @@ async def get_team_members(
     Returns:
         list[TeamMemberRead]
     """
-    statement = select(TeamMember)
+    statement = select(TeamMember, User).join(User, TeamMember.user_id == User.id)
     if project_id_filter is not None:
         statement = statement.where(TeamMember.project_id == project_id_filter)
-    statement = statement.order_by(TeamMember.name)
+    statement = statement.order_by(User.name, User.email)
     result_proxy = await session.execute(statement)
-    team_members = result_proxy.scalars().all()
-    return [TeamMemberRead.model_validate(team_member) for team_member in team_members]
+    team_members = result_proxy.all()
+
+    team_members_read: list[TeamMemberRead] = []
+    for team_member, user in team_members:
+        team_members_read.append(
+            TeamMemberRead.model_validate(
+                {
+                    **team_member.model_dump(),
+                    "name": user.name or user.email,
+                }
+            )
+        )
+    return team_members_read
 
 
 @router.get(
@@ -131,7 +146,23 @@ async def get_team_member(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Team member not found"
         )
-    return TeamMemberRead.model_validate(team_member)
+
+    user_proxy = await session.execute(
+        select(User).where(User.id == team_member.user_id)
+    )
+    user = user_proxy.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+
+    return TeamMemberRead.model_validate(
+        {
+            **team_member.model_dump(),
+            "name": user.name or user.email,
+        }
+    )
 
 
 @router.put(
@@ -166,7 +197,21 @@ async def update_team_member(
     session.add(db_team_member)
     await session.commit()
     await session.refresh(db_team_member)
-    return TeamMemberRead.model_validate(db_team_member)
+    user_proxy = await session.execute(
+        select(User).where(User.id == db_team_member.user_id)
+    )
+    user = user_proxy.scalar_one_or_none()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    return TeamMemberRead.model_validate(
+        {
+            **db_team_member.model_dump(),
+            "name": user.name or user.email,
+        }
+    )
 
 
 @router.delete("/{team_member_id}", status_code=status.HTTP_204_NO_CONTENT)

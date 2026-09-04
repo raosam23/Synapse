@@ -15,7 +15,6 @@ class TeamMember(SQLModel, table=True):
         UniqueConstraint("user_id", "project_id", name="uq_team_member_project_user"),
     )
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    name: str
     skills: list[str] = Field(
         default_factory=list,
         sa_column=Column(JSONB, nullable=False, server_default="[]"),

@@ -63,7 +63,6 @@ def _member(
 ) -> TeamMember:
     values = {
         "id": uuid4(),
-        "name": "Ada Lovelace",
         "skills": ["Python"],
         "user_id": user_id,
         "project_id": project_id,

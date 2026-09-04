@@ -75,7 +75,7 @@ Status / sprint decisions that need “what happened in the real world” use **
 `User` and `TeamMember` are **not the same thing**:
 
 - **`User`** — a login identity (`email` + `password_hash`). Created via `/api/v1/auth/register`. Required to authenticate and to comment/act as a real person.
-- **`TeamMember`** — a roster **seat on a project** (`name` + `skills` + `project_id`). Linked to an existing `User` via `user_id`. The same `User` may sit on more than one project; the same `User` cannot be added twice to the **same** project (unique `(project_id, user_id)`). A Synapse account is required before roster or assignment ([#50](https://github.com/raosam23/Synapse/issues/50), [#56](https://github.com/raosam23/Synapse/issues/56)).
+- **`TeamMember`** — a roster **seat on a project** (`skills` + `project_id`). Linked to an existing `User` via `user_id`. Display `name` on reads is `User.name`, or `User.email` if name is missing. The same `User` may sit on more than one project; the same `User` cannot be added twice to the **same** project (unique `(project_id, user_id)`). A Synapse account is required before roster or assignment ([#50](https://github.com/raosam23/Synapse/issues/50), [#56](https://github.com/raosam23/Synapse/issues/56), [#64](https://github.com/raosam23/Synapse/issues/64)).
 
 Auth is JWT in an httpOnly `access_token` cookie (not an `Authorization` header):
 
@@ -144,13 +144,13 @@ Keep models minimal; add only what the flow above needs.
 |--------|----------------------|
 | `User` | Logged-in identity for auth, comments / authorship (`email` + `password_hash`) |
 | `Project` | Name, requirements text, duration, AI opinion/analysis, fixed sprint length (2 weeks), project status |
-| `TeamMember` | Belongs to a project (`project_id`); name + skills; `user_id` link to an existing `User`; unique per `(project_id, user_id)` |
+| `TeamMember` | Belongs to a project (`project_id`); skills; `user_id` link to an existing `User`; unique per `(project_id, user_id)`. Display name is derived from `User` |
 | `Sprint` | Belongs to a project; ordered 2-week window (`start_date` / `end_date`) |
 | `Task` | Belongs to a project (`project_id`); `status`; optional `assignee_id` (same project); optional `sprint_id` (null while backlog); story points / effort; risk flag; `created_by_id` |
 | `TaskDependency` | Optional `from_task` → `to_task` edges |
 | `Comment` | Belongs to a task; body; author (user and/or AI); timestamps |
 
-**Schema progress:** `User`, `Project`, `TeamMember`, `Task`, and `TaskDependency` are migrated. `TeamMember` and `Task` have required `project_id`. Roster uniqueness is `(project_id, user_id)`, not global `user_id`. Add `Sprint` and `Comment` in follow-up tickets. `Task.sprint_id` is still a loose UUID (real FK in the Sprint ticket).
+**Schema progress:** `User`, `Project`, `TeamMember`, `Task`, and `TaskDependency` are migrated. `TeamMember` and `Task` have required `project_id`. Roster uniqueness is `(project_id, user_id)`, not global `user_id`. Roster display name comes from `User` (email if `User.name` is null); it is not stored on `team_members`. Add `Sprint` and `Comment` in follow-up tickets. `Task.sprint_id` is still a loose UUID (real FK in the Sprint ticket).
 
 ## Local development
 

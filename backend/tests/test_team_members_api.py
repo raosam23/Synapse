@@ -81,7 +81,6 @@ def _insert_assigned_task(
 def _create_team_member(
     api_client: TestClient,
     *,
-    name: str,
     skills: list[str],
     user_id: str,
     project_id: str,
@@ -89,7 +88,6 @@ def _create_team_member(
     response = api_client.post(
         "/api/v1/team-members/",
         json={
-            "name": name,
             "skills": skills,
             "user_id": user_id,
             "project_id": project_id,
@@ -105,7 +103,6 @@ def test_create_team_member(api_client: TestClient) -> None:
     response = api_client.post(
         "/api/v1/team-members/",
         json={
-            "name": "Ada Lovelace",
             "skills": ["Python", "SQL", "Data Analysis", "AI"],
             "user_id": user["id"],
             "project_id": project["id"],
@@ -113,7 +110,7 @@ def test_create_team_member(api_client: TestClient) -> None:
     )
     assert response.status_code == status.HTTP_201_CREATED
     body = response.json()
-    assert body["name"] == "Ada Lovelace"
+    assert body["name"] == user["name"]
     assert body["user_id"] == user["id"]
     assert body["project_id"] == project["id"]
     assert body["skills"] == ["Python", "SQL", "Data Analysis", "AI"]
@@ -124,7 +121,6 @@ def test_get_team_members(api_client: TestClient) -> None:
     project = _create_project(api_client)
     created = _create_team_member(
         api_client,
-        name="Grace Hopper",
         skills=["COBOL", "Compilers"],
         user_id=user["id"],
         project_id=project["id"],
@@ -134,7 +130,7 @@ def test_get_team_members(api_client: TestClient) -> None:
     assert response.status_code == status.HTTP_200_OK
     members = response.json()
     match = next(m for m in members if m["id"] == created["id"])
-    assert match["name"] == "Grace Hopper"
+    assert match["name"] == user["name"]
     assert match["skills"] == ["COBOL", "Compilers"]
     assert match["project_id"] == project["id"]
 
@@ -145,14 +141,12 @@ def test_get_team_members_filter_by_project(api_client: TestClient) -> None:
     project_b = _create_project(api_client, name="Project B")
     member_a = _create_team_member(
         api_client,
-        name="On Project A",
         skills=["Python"],
         user_id=user["id"],
         project_id=project_a["id"],
     )
     member_b = _create_team_member(
         api_client,
-        name="On Project B",
         skills=["SQL"],
         user_id=user["id"],
         project_id=project_b["id"],
@@ -174,7 +168,6 @@ def test_get_team_member(api_client: TestClient) -> None:
     project = _create_project(api_client)
     created = _create_team_member(
         api_client,
-        name="Alan Turing",
         skills=["Cryptography"],
         user_id=user["id"],
         project_id=project["id"],
@@ -184,7 +177,7 @@ def test_get_team_member(api_client: TestClient) -> None:
     assert response.status_code == status.HTTP_200_OK
     body = response.json()
     assert body["id"] == created["id"]
-    assert body["name"] == "Alan Turing"
+    assert body["name"] == user["name"]
     assert body["skills"] == ["Cryptography"]
     assert body["project_id"] == project["id"]
 
@@ -201,7 +194,6 @@ def test_update_team_member(api_client: TestClient) -> None:
     project = _create_project(api_client)
     created = _create_team_member(
         api_client,
-        name="Lisa Simpson",
         skills=["Cartooning", "Baking", "Skating", "Python"],
         user_id=user["id"],
         project_id=project["id"],
@@ -210,14 +202,13 @@ def test_update_team_member(api_client: TestClient) -> None:
     response = api_client.put(
         f"/api/v1/team-members/{created['id']}",
         json={
-            "name": "Lisa Manobal",
             "skills": ["Cartooning", "Baking", "Skating", "Python", "AI"],
         },
     )
     assert response.status_code == status.HTTP_200_OK
     body = response.json()
     assert body["id"] == created["id"]
-    assert body["name"] == "Lisa Manobal"
+    assert body["name"] == user["name"]
     assert body["skills"] == ["Cartooning", "Baking", "Skating", "Python", "AI"]
     assert body["project_id"] == project["id"]
 
@@ -228,7 +219,6 @@ def test_update_team_member_not_found(api_client: TestClient) -> None:
     response = api_client.put(
         f"/api/v1/team-members/{uuid4()}",
         json={
-            "name": "Lisa Manobal",
             "skills": ["Cartooning", "Baking", "Skating", "Python", "AI"],
         },
     )
@@ -240,7 +230,6 @@ def test_delete_team_member(api_client: TestClient) -> None:
     project = _create_project(api_client)
     created = _create_team_member(
         api_client,
-        name="Jennie Kim",
         skills=["K-Pop", "Dancing", "Singing", "Rapping"],
         user_id=user["id"],
         project_id=project["id"],
@@ -265,7 +254,6 @@ def test_delete_team_member_conflict(api_client: TestClient) -> None:
     project = _create_project(api_client)
     created = _create_team_member(
         api_client,
-        name="Roseanne Park",
         skills=["K-Pop", "Dancing", "Singing", "Rapping"],
         user_id=register_response["id"],
         project_id=project["id"],
@@ -284,7 +272,7 @@ def test_delete_team_member_conflict(api_client: TestClient) -> None:
 
 def test_update_team_member_validation_error(api_client: TestClient) -> None:
     _register_test_user(api_client)
-    response = api_client.put(f"/api/v1/team-members/{uuid4()}", json={"name": None})
+    response = api_client.put(f"/api/v1/team-members/{uuid4()}", json={"skills": None})
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
 
@@ -293,7 +281,6 @@ def test_update_team_member_clears_skills(api_client: TestClient) -> None:
     project = _create_project(api_client)
     created = _create_team_member(
         api_client,
-        name="Jisoo Kim",
         skills=["K-Pop", "Dancing", "Singing", "Rapping"],
         user_id=user["id"],
         project_id=project["id"],
@@ -311,7 +298,6 @@ def test_create_team_member_missing_user_returns_404(api_client: TestClient) -> 
     response = api_client.post(
         "/api/v1/team-members/",
         json={
-            "name": "Kim Nanjoon",
             "skills": ["K-Pop", "Dancing", "Singing", "Rapping"],
             "user_id": str(uuid4()),
             "project_id": project["id"],
@@ -325,7 +311,6 @@ def test_create_team_member_missing_project_returns_404(api_client: TestClient) 
     response = api_client.post(
         "/api/v1/team-members/",
         json={
-            "name": "Kim Nanjoon",
             "skills": ["K-Pop", "Dancing", "Singing", "Rapping"],
             "user_id": user["id"],
             "project_id": str(uuid4()),
@@ -339,7 +324,6 @@ def test_create_team_member_duplicate_user_returns_409(api_client: TestClient) -
     project = _create_project(api_client)
     _create_team_member(
         api_client,
-        name="Son Heung Min",
         skills=["Football", "Shooting", "Passing", "Heading"],
         user_id=user["id"],
         project_id=project["id"],
@@ -347,7 +331,6 @@ def test_create_team_member_duplicate_user_returns_409(api_client: TestClient) -
     response = api_client.post(
         "/api/v1/team-members/",
         json={
-            "name": "Son Heung Min",
             "skills": ["Football", "Shooting", "Passing", "Heading"],
             "user_id": user["id"],
             "project_id": project["id"],
@@ -362,14 +345,12 @@ def test_create_team_member_same_user_on_two_projects(api_client: TestClient) ->
     project_b = _create_project(api_client, name="Project B")
     first = _create_team_member(
         api_client,
-        name="Son Heung Min",
         skills=["Football"],
         user_id=user["id"],
         project_id=project_a["id"],
     )
     second = _create_team_member(
         api_client,
-        name="Son Heung Min",
         skills=["Football"],
         user_id=user["id"],
         project_id=project_b["id"],
@@ -379,6 +360,30 @@ def test_create_team_member_same_user_on_two_projects(api_client: TestClient) ->
     assert first["id"] != second["id"]
 
 
+def test_create_team_member_display_name_falls_back_to_email(
+    api_client: TestClient,
+) -> None:
+    email = f"no.name{uuid4()}@example.com"
+    register = api_client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": email,
+            "password": "some_users_password",
+        },
+    )
+    assert register.status_code == status.HTTP_201_CREATED
+    user = register.json()
+    assert user["name"] is None
+    project = _create_project(api_client)
+    created = _create_team_member(
+        api_client,
+        skills=["Python"],
+        user_id=user["id"],
+        project_id=project["id"],
+    )
+    assert created["name"] == email
+
+
 def test_create_task_with_linked_team_member_succeeds(
     api_client: TestClient,
 ) -> None:
@@ -386,7 +391,6 @@ def test_create_task_with_linked_team_member_succeeds(
     project = _create_project(api_client)
     team_member = _create_team_member(
         api_client,
-        name="Min Yoongi",
         skills=["Producing", "Rapping"],
         user_id=user["id"],
         project_id=project["id"],

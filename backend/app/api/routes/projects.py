@@ -171,5 +171,5 @@ async def delete_project(
         await session.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Cannot delete project while it has tasks",
+            detail="Cannot delete project while it has tasks or team members",
         ) from exc

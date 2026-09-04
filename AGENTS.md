@@ -75,7 +75,7 @@ Status / sprint decisions that need “what happened in the real world” use **
 `User` and `TeamMember` are **not the same thing**:
 
 - **`User`** — a login identity (`email` + `password_hash`). Created via `/api/v1/auth/register`. Required to authenticate and to comment/act as a real person.
-- **`TeamMember`** — a roster entry on a project (`name` + `skills`), used for assignment. In v1, every `TeamMember` must be linked to an existing `User` via `TeamMember.user_id`; a person must have a Synapse account before they can be added to the team or assigned work (tracked in [#50](https://github.com/raosam23/Synapse/issues/50)).
+- **`TeamMember`** — a roster **seat on a project** (`name` + `skills` + `project_id`). Linked to an existing `User` via `user_id`. The same `User` may sit on more than one project; the same `User` cannot be added twice to the **same** project (unique `(project_id, user_id)`). A Synapse account is required before roster or assignment ([#50](https://github.com/raosam23/Synapse/issues/50), [#56](https://github.com/raosam23/Synapse/issues/56)).
 
 Auth is JWT in an httpOnly `access_token` cookie (not an `Authorization` header):
 
@@ -83,7 +83,7 @@ Auth is JWT in an httpOnly `access_token` cookie (not an `Authorization` header)
 - Register and login set the cookie (`httponly`, `samesite=lax`) and return the user JSON only — the JWT is not in the response body
 - All `projects`, `team-members`, `tasks`, `task-dependencies`, and `GET /auth/me` endpoints require a valid `access_token` cookie
 - A task's `created_by_id` is always set server-side from the authenticated user — never accepted from the client
-- Creating a `TeamMember` requires an existing linked `User`; assigning a task to an unlinked `TeamMember` is rejected (`409`)
+- Creating a `TeamMember` requires an existing `User` and an existing `Project` (`project_id`); assigning a task to an unlinked `TeamMember` is rejected (`409`); the assignee must belong to the **same** project as the task (`409` if they do not)
 - `POST /api/v1/auth/logout` revokes the token's `jti` (`RevokedToken` blocklist) and clears the cookie. A revoked JWT is rejected even if the cookie is still present.
 
 ## Repository layout
@@ -144,13 +144,13 @@ Keep models minimal; add only what the flow above needs.
 |--------|----------------------|
 | `User` | Logged-in identity for auth, comments / authorship (`email` + `password_hash`) |
 | `Project` | Name, requirements text, duration, AI opinion/analysis, fixed sprint length (2 weeks), project status |
-| `TeamMember` | Belongs to a project; name + skills; required `user_id` link to an existing `User` |
+| `TeamMember` | Belongs to a project (`project_id`); name + skills; `user_id` link to an existing `User`; unique per `(project_id, user_id)` |
 | `Sprint` | Belongs to a project; ordered 2-week window (`start_date` / `end_date`) |
-| `Task` | Belongs to a project; `status`; optional `assignee_id`; optional `sprint_id` (null while backlog); story points / effort; risk flag; `created_by_id` (the `User` who created it) |
+| `Task` | Belongs to a project (`project_id`); `status`; optional `assignee_id` (same project); optional `sprint_id` (null while backlog); story points / effort; risk flag; `created_by_id` |
 | `TaskDependency` | Optional `from_task` → `to_task` edges |
 | `Comment` | Belongs to a task; body; author (user and/or AI); timestamps |
 
-**Schema progress:** `User`, `TeamMember`, `Task`, `TaskDependency`, and `Project` are migrated (including `Task.created_by_id` and `TeamMember.user_id`). Add `Sprint` and `Comment` in follow-up tickets. `TeamMember` and `Task` still have no `project_id` — keep designing FKs with that target in mind (e.g. `project_id` / `sprint_id` on `Task`).
+**Schema progress:** `User`, `Project`, `TeamMember`, `Task`, and `TaskDependency` are migrated. `TeamMember` and `Task` have required `project_id`. Roster uniqueness is `(project_id, user_id)`, not global `user_id`. Add `Sprint` and `Comment` in follow-up tickets. `Task.sprint_id` is still a loose UUID (real FK in the Sprint ticket).
 
 ## Local development
 

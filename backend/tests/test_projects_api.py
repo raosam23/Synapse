@@ -193,3 +193,24 @@ def test_delete_project_not_found(api_client: TestClient) -> None:
     _register_test_user(api_client)
     response = api_client.delete(f"/api/v1/projects/{uuid4()}")
     assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_delete_project_conflict_when_it_has_team_members(
+    api_client: TestClient,
+) -> None:
+    user = _register_test_user(api_client)
+    created = _create_project(api_client, name="Has roster")
+    member_response = api_client.post(
+        "/api/v1/team-members/",
+        json={
+            "name": "Ada Lovelace",
+            "skills": ["Python"],
+            "user_id": user["id"],
+            "project_id": created["id"],
+        },
+    )
+    assert member_response.status_code == status.HTTP_201_CREATED
+
+    response = api_client.delete(f"/api/v1/projects/{created['id']}")
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert "team members" in response.json()["detail"]

@@ -12,7 +12,7 @@ from sqlmodel import select
 
 from app.core.security import get_current_user
 from app.db.session import get_session
-from app.models import Task, TeamMember, User
+from app.models import Project, Task, TeamMember, User
 from app.models.task import TaskStatus
 from app.schemas.task import TaskCreate, TaskRead, TaskUpdate
 
@@ -22,7 +22,11 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
-async def _ensure_assignee_exists(session: AsyncSession, assignee_id: UUID) -> None:
+async def _ensure_assignee_exists(
+    session: AsyncSession,
+    assignee_id: UUID,
+    project_id: UUID,
+) -> None:
     """Raise 404 if assignee_id is not an existing team member."""
     result = await session.execute(
         select(TeamMember).where(TeamMember.id == assignee_id)
@@ -37,6 +41,11 @@ async def _ensure_assignee_exists(session: AsyncSession, assignee_id: UUID) -> N
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Team member is not a user",
+        )
+    if team_member.project_id != project_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Team member is not on this project",
         )
 
 
@@ -53,7 +62,17 @@ async def create_task(
         TaskRead
     """
     if task.assignee_id is not None:
-        await _ensure_assignee_exists(session, task.assignee_id)
+        await _ensure_assignee_exists(session, task.assignee_id, task.project_id)
+
+    project_proxy = await session.execute(
+        select(Project).where(Project.id == task.project_id)
+    )
+    project = project_proxy.scalar_one_or_none()
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found",
+        )
 
     new_task = Task(
         title=task.title,
@@ -64,6 +83,7 @@ async def create_task(
         story_points=task.story_points,
         risk_flag=task.risk_flag,
         created_by_id=current_user.id,
+        project_id=task.project_id,
     )
     session.add(new_task)
     await session.commit()
@@ -76,18 +96,22 @@ async def get_all_tasks(
     session: Session,
     current_user: CurrentUser,
     status_filter: Annotated[TaskStatus | None, Query(alias="status")] = None,
+    project_id_filter: Annotated[UUID | None, Query(alias="project_id")] = None,
 ) -> list[TaskRead]:
     """Endpoint to get all tasks.
     Args:
         session: Session
         current_user: CurrentUser
         status_filter: optional TaskStatus query filter (`?status=`)
+        project_id_filter: optional UUID query filter (`?project_id=`)
     Returns:
         list[TaskRead]
     """
     statement = select(Task)
     if status_filter is not None:
         statement = statement.where(Task.status == status_filter)
+    if project_id_filter is not None:
+        statement = statement.where(Task.project_id == project_id_filter)
     statement = statement.order_by(desc(Task.created_at))
     task_proxy = await session.execute(statement)
     tasks = task_proxy.scalars().all()
@@ -137,7 +161,7 @@ async def update_task(
 
     updates = task_update.model_dump(exclude_unset=True)
     if "assignee_id" in updates and updates["assignee_id"] is not None:
-        await _ensure_assignee_exists(session, updates["assignee_id"])
+        await _ensure_assignee_exists(session, updates["assignee_id"], task.project_id)
 
     for key, value in updates.items():
         setattr(task, key, value)

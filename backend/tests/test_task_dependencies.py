@@ -37,8 +37,11 @@ async def test_create_task_dependency_success(current_user: User) -> None:
     from_id = uuid4()
     to_id = uuid4()
     created_id = uuid4()
-    from_task = Task(id=from_id, title="A", status=TaskStatus.BACKLOG)
-    to_task = Task(id=to_id, title="B", status=TaskStatus.TODO)
+    project_id = uuid4()
+    from_task = Task(
+        id=from_id, title="A", status=TaskStatus.BACKLOG, project_id=project_id
+    )
+    to_task = Task(id=to_id, title="B", status=TaskStatus.TODO, project_id=project_id)
 
     session = AsyncMock()
     session.add = MagicMock()
@@ -97,9 +100,18 @@ async def test_create_task_dependency_duplicate_conflict(current_user: User) -> 
     session.execute = AsyncMock(
         side_effect=[
             _execute_result(
-                scalar=Task(id=from_id, title="A", status=TaskStatus.BACKLOG)
+                scalar=Task(
+                    id=from_id,
+                    title="A",
+                    status=TaskStatus.BACKLOG,
+                    project_id=uuid4(),
+                )
             ),
-            _execute_result(scalar=Task(id=to_id, title="B", status=TaskStatus.TODO)),
+            _execute_result(
+                scalar=Task(
+                    id=to_id, title="B", status=TaskStatus.TODO, project_id=uuid4()
+                )
+            ),
         ]
     )
     session.commit = AsyncMock(side_effect=IntegrityError("stmt", {}, Exception()))

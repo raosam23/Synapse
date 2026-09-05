@@ -24,7 +24,7 @@ class Task(SQLModel, table=True):
     __tablename__ = "tasks"
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     title: str = Field(nullable=False)
-    sprint_id: UUID | None = None
+    sprint_id: UUID | None = Field(default=None, foreign_key="sprints.id")
     description: str | None = None
     status: TaskStatus = Field(
         default=TaskStatus.BACKLOG,

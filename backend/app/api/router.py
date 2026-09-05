@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from app.api.routes import (
     AuthRouter,
     ProjectsRouter,
+    SprintsRouter,
     TaskDependenciesRouter,
     TaskRouter,
     TeamMembersRouter,
@@ -18,3 +19,4 @@ router.include_router(
 )
 router.include_router(AuthRouter, prefix="/auth", tags=["Auth"])
 router.include_router(ProjectsRouter, prefix="/projects", tags=["Projects"])
+router.include_router(SprintsRouter, prefix="/sprints", tags=["Sprints"])

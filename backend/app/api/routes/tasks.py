@@ -12,7 +12,7 @@ from sqlmodel import select
 
 from app.core.security import get_current_user
 from app.db.session import get_session
-from app.models import Project, Task, TeamMember, User
+from app.models import Project, Sprint, Task, TeamMember, User
 from app.models.task import TaskStatus
 from app.schemas.task import TaskCreate, TaskRead, TaskUpdate
 
@@ -49,6 +49,28 @@ async def _ensure_assignee_exists(
         )
 
 
+async def _ensure_sprint_exists(
+    session: AsyncSession,
+    sprint_id: UUID,
+    project_id: UUID,
+) -> None:
+    """Raise 404 if sprint_id is not an existing sprint. Raise 409 if sprint_id is not part of the project."""
+
+    result = await session.execute(select(Sprint).where(Sprint.id == sprint_id))
+    sprint = result.scalar_one_or_none()
+    if not sprint:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sprint not found",
+        )
+
+    if sprint.project_id != project_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Sprint is not part of this project",
+        )
+
+
 @router.post("/", response_model=TaskRead, status_code=status.HTTP_201_CREATED)
 async def create_task(
     task: TaskCreate, session: Session, current_user: CurrentUser
@@ -63,6 +85,9 @@ async def create_task(
     """
     if task.assignee_id is not None:
         await _ensure_assignee_exists(session, task.assignee_id, task.project_id)
+
+    if task.sprint_id is not None:
+        await _ensure_sprint_exists(session, task.sprint_id, task.project_id)
 
     project_proxy = await session.execute(
         select(Project).where(Project.id == task.project_id)
@@ -162,6 +187,9 @@ async def update_task(
     updates = task_update.model_dump(exclude_unset=True)
     if "assignee_id" in updates and updates["assignee_id"] is not None:
         await _ensure_assignee_exists(session, updates["assignee_id"], task.project_id)
+
+    if "sprint_id" in updates and updates["sprint_id"] is not None:
+        await _ensure_sprint_exists(session, updates["sprint_id"], task.project_id)
 
     for key, value in updates.items():
         setattr(task, key, value)

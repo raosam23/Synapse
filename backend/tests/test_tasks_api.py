@@ -140,3 +140,88 @@ def test_get_tasks_filter_by_project(api_client: TestClient) -> None:
     assert task_a.json()["id"] in ids
     assert task_b.json()["id"] not in ids
     assert all(t["project_id"] == project_a["id"] for t in tasks)
+
+
+def _plan_sprints(
+    api_client: TestClient,
+    *,
+    project_id: str,
+    start_date: str = "2026-04-06",
+) -> list[dict]:
+    response = api_client.post(
+        "/api/v1/sprints/",
+        json={"project_id": project_id, "start_date": start_date},
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    return response.json()
+
+
+def test_create_task_unknown_sprint_returns_404(api_client: TestClient) -> None:
+    _register_test_user(api_client)
+    project = _create_project(api_client)
+    response = api_client.post(
+        "/api/v1/tasks/",
+        json={
+            "title": "Unknown sprint",
+            "project_id": project["id"],
+            "sprint_id": str(uuid4()),
+        },
+    )
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_create_task_sprint_on_other_project_returns_409(
+    api_client: TestClient,
+) -> None:
+    _register_test_user(api_client)
+    project_a = _create_project(api_client, name="Project A")
+    project_b = _create_project(api_client, name="Project B")
+    sprint_on_b = _plan_sprints(api_client, project_id=project_b["id"])[0]
+
+    response = api_client.post(
+        "/api/v1/tasks/",
+        json={
+            "title": "Wrong sprint project",
+            "project_id": project_a["id"],
+            "sprint_id": sprint_on_b["id"],
+        },
+    )
+    assert response.status_code == status.HTTP_409_CONFLICT
+
+
+def test_create_task_with_sprint_on_same_project(api_client: TestClient) -> None:
+    _register_test_user(api_client)
+    project = _create_project(api_client)
+    sprint = _plan_sprints(api_client, project_id=project["id"])[0]
+    response = api_client.post(
+        "/api/v1/tasks/",
+        json={
+            "title": "In sprint 1",
+            "project_id": project["id"],
+            "sprint_id": sprint["id"],
+        },
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    body = response.json()
+    assert body["sprint_id"] == sprint["id"]
+    assert body["project_id"] == project["id"]
+
+
+def test_update_task_sprint_on_other_project_returns_409(
+    api_client: TestClient,
+) -> None:
+    _register_test_user(api_client)
+    project_a = _create_project(api_client, name="Project A")
+    project_b = _create_project(api_client, name="Project B")
+    sprint_on_b = _plan_sprints(api_client, project_id=project_b["id"])[0]
+    created = api_client.post(
+        "/api/v1/tasks/",
+        json={"title": "Backlog", "project_id": project_a["id"]},
+    )
+    assert created.status_code == status.HTTP_201_CREATED
+
+    response = api_client.put(
+        f"/api/v1/tasks/{created.json()['id']}",
+        json={"sprint_id": sprint_on_b["id"]},
+    )
+    assert response.status_code == status.HTTP_409_CONFLICT

@@ -117,7 +117,7 @@ docker compose exec backend uv run alembic upgrade head
 
 ## Authentication
 
-Auth is a JWT stored in an httpOnly cookie named `access_token` (`samesite=lax`). Register and login set the cookie and return the user object only — the token is **not** in the JSON body. `projects`, `team-members`, `tasks`, `task-dependencies`, and `GET /api/v1/auth/me` all require that cookie.
+Auth is a JWT stored in an httpOnly cookie named `access_token` (`samesite=lax`). Register and login set the cookie and return the user object only — the token is **not** in the JSON body. `projects`, `team-members`, `sprints`, `tasks`, `task-dependencies`, and `GET /api/v1/auth/me` all require that cookie.
 
 ```bash
 # Cookie jar so later requests send access_token
@@ -190,6 +190,6 @@ CI runs lint, tests, and Docker image builds on PRs to `main`. The `test` job st
 
 ## Current status
 
-Early **v1.0.0** build-out: schema includes `users`, `projects`, `team_members`, `tasks`, and `task_dependencies`. Team members and tasks belong to a project (`project_id`); list them with `?project_id=`. A team member’s display name is the linked user’s name, or their email if name is missing. Cookie-auth CRUD exists for projects, team members, tasks, and task dependencies. Sprints, comments, agents, and the Kanban UI come next.
+Early **v1.0.0** build-out: schema includes `users`, `projects`, `team_members`, `sprints`, `tasks`, and `task_dependencies`. Team members, sprints, and tasks belong to a project (`project_id`); list them with `?project_id=`. `POST /api/v1/sprints/` generates consecutive 2-week windows from the project duration. A task’s `sprint_id` is optional (null in the backlog) and must point at a sprint on the same project. A team member’s display name is the linked user’s name, or their email if name is missing. Cookie-auth CRUD exists for projects, team members, sprints, tasks, and task dependencies. Comments, agents, and the Kanban UI come next.
 
 See [`AGENTS.md`](./AGENTS.md) for scope, task statuses, and agent roles.

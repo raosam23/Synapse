@@ -1,5 +1,6 @@
 """Unit tests for task CRUD routes."""
 
+from datetime import date
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
 
@@ -16,6 +17,7 @@ from app.api.routes.tasks import (
     update_task,
 )
 from app.models.project import Project
+from app.models.sprint import Sprint
 from app.models.task import Task, TaskStatus
 from app.models.team_member import TeamMember
 from app.models.user import User
@@ -69,6 +71,18 @@ def _member(
     }
     values.update(overrides)
     return TeamMember(**values)
+
+
+def _sprint(*, project_id: UUID, **overrides: object) -> Sprint:
+    values = {
+        "id": uuid4(),
+        "project_id": project_id,
+        "index": 1,
+        "start_date": date(2026, 4, 6),
+        "end_date": date(2026, 4, 19),
+    }
+    values.update(overrides)
+    return Sprint(**values)
 
 
 @pytest.mark.asyncio
@@ -225,6 +239,79 @@ async def test_create_task_success_with_assignee(current_user: User) -> None:
     assert added.project_id == project.id
     assert result.assignee_id == member.id
     assert result.project_id == project.id
+
+
+@pytest.mark.asyncio
+async def test_create_task_success_with_sprint(current_user: User) -> None:
+    project = _project(owner_id=current_user.id)
+    sprint = _sprint(project_id=project.id)
+    payload = TaskCreate(
+        title="Write unit tests",
+        status=TaskStatus.BACKLOG,
+        sprint_id=sprint.id,
+        project_id=project.id,
+    )
+    session = AsyncMock()
+    session.add = MagicMock()
+    session.commit = AsyncMock()
+    session.refresh = AsyncMock()
+    session.execute = AsyncMock(
+        side_effect=[
+            _execute_result(scalar=sprint),
+            _execute_result(scalar=project),
+        ]
+    )
+
+    result = await create_task(payload, session, current_user)
+
+    added = session.add.call_args[0][0]
+    assert added.sprint_id == sprint.id
+    assert added.project_id == project.id
+    assert result.sprint_id == sprint.id
+    assert result.project_id == project.id
+
+
+@pytest.mark.asyncio
+async def test_create_task_sprint_not_found(current_user: User) -> None:
+    payload = TaskCreate(
+        title="Write unit tests",
+        status=TaskStatus.BACKLOG,
+        sprint_id=uuid4(),
+        project_id=uuid4(),
+    )
+    session = AsyncMock()
+    session.add = MagicMock()
+    session.execute = AsyncMock(return_value=_execute_result(scalar=None))
+
+    with pytest.raises(HTTPException) as exc_info:
+        await create_task(payload, session, current_user)
+
+    assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
+    assert exc_info.value.detail == "Sprint not found"
+    session.add.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_create_task_sprint_wrong_project_returns_409(
+    current_user: User,
+) -> None:
+    task_project = _project(owner_id=current_user.id)
+    sprint = _sprint(project_id=uuid4())
+    payload = TaskCreate(
+        title="Write unit tests",
+        status=TaskStatus.BACKLOG,
+        sprint_id=sprint.id,
+        project_id=task_project.id,
+    )
+    session = AsyncMock()
+    session.add = MagicMock()
+    session.execute = AsyncMock(return_value=_execute_result(scalar=sprint))
+
+    with pytest.raises(HTTPException) as exc_info:
+        await create_task(payload, session, current_user)
+
+    assert exc_info.value.status_code == status.HTTP_409_CONFLICT
+    session.add.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -448,6 +535,52 @@ async def test_update_task_assignee_wrong_project_returns_409(
     with pytest.raises(HTTPException) as exc_info:
         await update_task(
             task_id, TaskUpdate(assignee_id=other_member.id), session, current_user
+        )
+
+    assert exc_info.value.status_code == status.HTTP_409_CONFLICT
+    session.commit.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_update_task_sprint_not_found(current_user: User) -> None:
+    task_id = uuid4()
+    db_task = _task(id=task_id, title="Old", status=TaskStatus.BACKLOG)
+    session = AsyncMock()
+    session.execute = AsyncMock(
+        side_effect=[
+            _execute_result(scalar=db_task),
+            _execute_result(scalar=None),
+        ]
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await update_task(task_id, TaskUpdate(sprint_id=uuid4()), session, current_user)
+
+    assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
+    session.commit.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_update_task_sprint_wrong_project_returns_409(
+    current_user: User,
+) -> None:
+    task_id = uuid4()
+    project_id = uuid4()
+    db_task = _task(
+        id=task_id, title="Old", status=TaskStatus.BACKLOG, project_id=project_id
+    )
+    other_sprint = _sprint(project_id=uuid4())
+    session = AsyncMock()
+    session.execute = AsyncMock(
+        side_effect=[
+            _execute_result(scalar=db_task),
+            _execute_result(scalar=other_sprint),
+        ]
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await update_task(
+            task_id, TaskUpdate(sprint_id=other_sprint.id), session, current_user
         )
 
     assert exc_info.value.status_code == status.HTTP_409_CONFLICT

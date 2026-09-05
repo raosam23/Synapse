@@ -1,5 +1,6 @@
 """SQLModel schemas for the application."""
 
+from app.models.comment import Comment
 from app.models.project import Project
 from app.models.revoked_token import RevokedToken
 from app.models.sprint import Sprint
@@ -9,6 +10,7 @@ from app.models.team_member import TeamMember
 from app.models.user import User
 
 __all__ = [
+    "Comment",
     "Project",
     "RevokedToken",
     "Sprint",

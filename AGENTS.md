@@ -62,6 +62,7 @@ Status / sprint decisions that need “what happened in the real world” use **
 
 - Any **logged-in** user can comment on a task
 - The **AI** may also post comments when useful (e.g. why it reassigned or pulled a ticket)
+- Authorship is `user_id` (nullable) + `is_ai`: humans get `user_id` from the cookie and `is_ai=False`; AI comments use `user_id=None` and `is_ai=True`. The client never sends author fields
 - Agents read comment history to update status, pull next backlog items, or adjust the sprint board
 
 ### Agents (v1.0.0)
@@ -81,8 +82,9 @@ Auth is JWT in an httpOnly `access_token` cookie (not an `Authorization` header)
 
 - `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me`
 - Register and login set the cookie (`httponly`, `samesite=lax`) and return the user JSON only — the JWT is not in the response body
-- All `projects`, `team-members`, `sprints`, `tasks`, `task-dependencies`, and `GET /auth/me` endpoints require a valid `access_token` cookie
+- All `projects`, `team-members`, `sprints`, `tasks`, `task-dependencies`, `comments`, and `GET /auth/me` endpoints require a valid `access_token` cookie
 - A task's `created_by_id` is always set server-side from the authenticated user — never accepted from the client
+- A comment's `user_id` and `is_ai` are always set server-side — never accepted from the client
 - Creating a `TeamMember` requires an existing `User` and an existing `Project` (`project_id`); assigning a task to an unlinked `TeamMember` is rejected (`409`); the assignee must belong to the **same** project as the task (`409` if they do not)
 - `POST /api/v1/auth/logout` revokes the token's `jti` (`RevokedToken` blocklist) and clears the cookie. A revoked JWT is rejected even if the cookie is still present.
 
@@ -148,9 +150,9 @@ Keep models minimal; add only what the flow above needs.
 | `Sprint` | Belongs to a project; `index` unique per project; 2-week window (`start_date` / `end_date`) |
 | `Task` | Belongs to a project (`project_id`); `status`; optional `assignee_id` (same project); optional `sprint_id` (null while backlog); story points / effort; risk flag; `created_by_id` |
 | `TaskDependency` | Optional `from_task` → `to_task` edges |
-| `Comment` | Belongs to a task; body; author (user and/or AI); timestamps |
+| `Comment` | Belongs to a task (`task_id`); body; optional `user_id`; `is_ai`; timestamps |
 
-**Schema progress:** `User`, `Project`, `TeamMember`, `Sprint`, `Task`, and `TaskDependency` are migrated. `TeamMember` and `Task` have required `project_id`. Roster uniqueness is `(project_id, user_id)`, not global `user_id`. Roster display name comes from `User` (email if `User.name` is null); it is not stored on `team_members`. Sprints are consecutive 2-week windows from `duration_weeks` (`POST /api/v1/sprints/`); unique `(project_id, index)`. `Task.sprint_id` is an optional FK to `sprints.id` (null while backlog) and must belong to the same project. Add `Comment` in a follow-up ticket.
+**Schema progress:** `User`, `Project`, `TeamMember`, `Sprint`, `Task`, `TaskDependency`, and `Comment` are migrated. `TeamMember` and `Task` have required `project_id`. Roster uniqueness is `(project_id, user_id)`, not global `user_id`. Roster display name comes from `User` (email if `User.name` is null); it is not stored on `team_members`. Sprints are consecutive 2-week windows from `duration_weeks` (`POST /api/v1/sprints/`); unique `(project_id, index)`. `Task.sprint_id` is an optional FK to `sprints.id` (null while backlog) and must belong to the same project. Comments belong to a task (`task_id`); list them with `?task_id=`. Human comments set `user_id` from the cookie and `is_ai=False`; AI comments will use `user_id=None` and `is_ai=True`.
 
 ## Local development
 

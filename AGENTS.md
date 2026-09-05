@@ -81,7 +81,7 @@ Auth is JWT in an httpOnly `access_token` cookie (not an `Authorization` header)
 
 - `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me`
 - Register and login set the cookie (`httponly`, `samesite=lax`) and return the user JSON only — the JWT is not in the response body
-- All `projects`, `team-members`, `tasks`, `task-dependencies`, and `GET /auth/me` endpoints require a valid `access_token` cookie
+- All `projects`, `team-members`, `sprints`, `tasks`, `task-dependencies`, and `GET /auth/me` endpoints require a valid `access_token` cookie
 - A task's `created_by_id` is always set server-side from the authenticated user — never accepted from the client
 - Creating a `TeamMember` requires an existing `User` and an existing `Project` (`project_id`); assigning a task to an unlinked `TeamMember` is rejected (`409`); the assignee must belong to the **same** project as the task (`409` if they do not)
 - `POST /api/v1/auth/logout` revokes the token's `jti` (`RevokedToken` blocklist) and clears the cookie. A revoked JWT is rejected even if the cookie is still present.
@@ -145,12 +145,12 @@ Keep models minimal; add only what the flow above needs.
 | `User` | Logged-in identity for auth, comments / authorship (`email` + `password_hash`) |
 | `Project` | Name, requirements text, duration, AI opinion/analysis, fixed sprint length (2 weeks), project status |
 | `TeamMember` | Belongs to a project (`project_id`); skills; `user_id` link to an existing `User`; unique per `(project_id, user_id)`. Display name is derived from `User` |
-| `Sprint` | Belongs to a project; ordered 2-week window (`start_date` / `end_date`) |
+| `Sprint` | Belongs to a project; `index` unique per project; 2-week window (`start_date` / `end_date`) |
 | `Task` | Belongs to a project (`project_id`); `status`; optional `assignee_id` (same project); optional `sprint_id` (null while backlog); story points / effort; risk flag; `created_by_id` |
 | `TaskDependency` | Optional `from_task` → `to_task` edges |
 | `Comment` | Belongs to a task; body; author (user and/or AI); timestamps |
 
-**Schema progress:** `User`, `Project`, `TeamMember`, `Task`, and `TaskDependency` are migrated. `TeamMember` and `Task` have required `project_id`. Roster uniqueness is `(project_id, user_id)`, not global `user_id`. Roster display name comes from `User` (email if `User.name` is null); it is not stored on `team_members`. Add `Sprint` and `Comment` in follow-up tickets. `Task.sprint_id` is still a loose UUID (real FK in the Sprint ticket).
+**Schema progress:** `User`, `Project`, `TeamMember`, `Sprint`, `Task`, and `TaskDependency` are migrated. `TeamMember` and `Task` have required `project_id`. Roster uniqueness is `(project_id, user_id)`, not global `user_id`. Roster display name comes from `User` (email if `User.name` is null); it is not stored on `team_members`. Sprints are consecutive 2-week windows from `duration_weeks` (`POST /api/v1/sprints/`); unique `(project_id, index)`. `Task.sprint_id` is an optional FK to `sprints.id` (null while backlog) and must belong to the same project. Add `Comment` in a follow-up ticket.
 
 ## Local development
 

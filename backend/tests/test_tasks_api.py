@@ -225,3 +225,29 @@ def test_update_task_sprint_on_other_project_returns_409(
         json={"sprint_id": sprint_on_b["id"]},
     )
     assert response.status_code == status.HTTP_409_CONFLICT
+
+
+def test_delete_task_with_comments_succeeds(api_client: TestClient) -> None:
+    _register_test_user(api_client)
+    project = _create_project(api_client)
+    created = api_client.post(
+        "/api/v1/tasks/",
+        json={"title": "Commented task", "project_id": project["id"]},
+    )
+    assert created.status_code == status.HTTP_201_CREATED
+    task_id = created.json()["id"]
+
+    comment = api_client.post(
+        "/api/v1/comments/",
+        json={"task_id": task_id, "body": "Progress note"},
+    )
+    assert comment.status_code == status.HTTP_201_CREATED
+    comment_id = comment.json()["id"]
+
+    response = api_client.delete(f"/api/v1/tasks/{task_id}")
+    assert response.status_code == status.HTTP_204_NO_CONTENT
+
+    missing_task = api_client.get(f"/api/v1/tasks/{task_id}")
+    assert missing_task.status_code == status.HTTP_404_NOT_FOUND
+    missing_comment = api_client.get(f"/api/v1/comments/{comment_id}")
+    assert missing_comment.status_code == status.HTTP_404_NOT_FOUND

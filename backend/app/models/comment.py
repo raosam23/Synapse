@@ -12,7 +12,7 @@ class Comment(SQLModel, table=True):
     __tablename__ = "comments"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    task_id: UUID = Field(foreign_key="tasks.id", nullable=False)
+    task_id: UUID = Field(foreign_key="tasks.id", nullable=False, ondelete="CASCADE")
     body: str = Field(nullable=False)
     user_id: UUID | None = Field(default=None, foreign_key="users.id")
     is_ai: bool = Field(default=False)

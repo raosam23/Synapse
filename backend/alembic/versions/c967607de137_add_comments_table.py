@@ -35,6 +35,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["task_id"],
             ["tasks.id"],
+            ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
             ["user_id"],

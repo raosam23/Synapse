@@ -213,3 +213,17 @@ def test_delete_project_conflict_when_it_has_team_members(
     response = api_client.delete(f"/api/v1/projects/{created['id']}")
     assert response.status_code == status.HTTP_409_CONFLICT
     assert "team members" in response.json()["detail"]
+
+
+def test_delete_project_conflict_when_it_has_sprints(api_client: TestClient) -> None:
+    _register_test_user(api_client)
+    created = _create_project(api_client, name="Has sprints")
+    plan = api_client.post(
+        "/api/v1/sprints/",
+        json={"project_id": created["id"], "start_date": "2026-04-06"},
+    )
+    assert plan.status_code == status.HTTP_201_CREATED
+
+    response = api_client.delete(f"/api/v1/projects/{created['id']}")
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert "sprints" in response.json()["detail"]

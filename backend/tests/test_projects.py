@@ -204,6 +204,7 @@ async def test_delete_project_integrity_error_returns_409(current_user: User) ->
 
     assert exc_info.value.status_code == status.HTTP_409_CONFLICT
     assert "team members" in exc_info.value.detail
+    assert "sprints" in exc_info.value.detail
     session.rollback.assert_awaited_once()
 
 

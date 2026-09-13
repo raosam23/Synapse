@@ -12,7 +12,8 @@ from sqlmodel import select
 from app.core.security import get_current_user
 from app.db.session import get_session
 from app.models import Project, User
-from app.schemas.project import ProjectCreate, ProjectRead, ProjectUpdate
+from app.schemas.project import AgentRunRead, ProjectCreate, ProjectRead, ProjectUpdate
+from app.agents.graph import run_stub
 
 router = APIRouter()
 
@@ -173,3 +174,27 @@ async def delete_project(
             status_code=status.HTTP_409_CONFLICT,
             detail="Cannot delete project while it has tasks, team members, or sprints",
         ) from exc
+
+
+@router.post("/{project_id}/agents/run", status_code=status.HTTP_200_OK, response_model=AgentRunRead)
+async def run_agents(
+    project_id: UUID,
+    session: Session,
+    current_user: CurrentUser,
+) -> AgentRunRead:
+    project_proxy = await session.execute(
+        select(Project).where(
+            Project.created_by_id == current_user.id,
+            Project.id == project_id,
+        )
+    )
+    project = project_proxy.scalar_one_or_none()
+
+    if project is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Project with id {project_id} not found.",
+        )
+    
+    result = run_stub(project.id)
+    return AgentRunRead(project_id=project.id, message=result["message"])

@@ -71,6 +71,8 @@ Status / sprint decisions that need “what happened in the real world” use **
 - **Sprint Planner** — fill sprints by capacity (story points), assign to team members, pull next work when capacity frees up
 - **Risk Analyzer** — flag delivery risk on tasks / plan
 
+**Runtime (stub):** LangGraph lives in `backend/app/agents/graph.py`. `POST /api/v1/projects/{project_id}/agents/run` (cookie auth; same owner check as `GET /projects/{id}`) loads the project and invokes a one-node graph that returns a placeholder message. It does **not** call an LLM, write `ai_opinion`, or create tasks. `OPENAI_API_KEY` and `LLM_MODEL` are in `.env.example` for later agent tickets; the key is optional so pytest/CI run without a provider. Real analysis is #60–#62.
+
 ### Authentication (v1.0.0)
 
 `User` and `TeamMember` are **not the same thing**:
@@ -82,7 +84,7 @@ Auth is JWT in an httpOnly `access_token` cookie (not an `Authorization` header)
 
 - `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me`
 - Register and login set the cookie (`httponly`, `samesite=lax`) and return the user JSON only — the JWT is not in the response body
-- All `projects`, `team-members`, `sprints`, `tasks`, `task-dependencies`, `comments`, and `GET /auth/me` endpoints require a valid `access_token` cookie
+- All `projects` (including `POST /projects/{id}/agents/run`), `team-members`, `sprints`, `tasks`, `task-dependencies`, `comments`, and `GET /auth/me` endpoints require a valid `access_token` cookie
 - A task's `created_by_id` is always set server-side from the authenticated user — never accepted from the client
 - A comment's `user_id` and `is_ai` are always set server-side — never accepted from the client
 - Creating a `TeamMember` requires an existing `User` and an existing `Project` (`project_id`); assigning a task to an unlinked `TeamMember` is rejected (`409`); the assignee must belong to the **same** project as the task (`409` if they do not)

@@ -13,11 +13,14 @@ from app.api.routes.projects import (
     delete_project,
     get_all_projects,
     get_project_by_id,
+    run_agents,
     update_project,
 )
 from app.models.project import Project, ProjectStatus
 from app.models.user import User
-from app.schemas.project import ProjectCreate, ProjectRead, ProjectUpdate
+from app.schemas.project import AgentRunRead, ProjectCreate, ProjectRead, ProjectUpdate
+
+_STUB_MESSAGE = "Agent runtime is not implemented yet for this project."
 
 
 def _execute_result(*, scalar: object) -> MagicMock:
@@ -188,6 +191,31 @@ async def test_delete_project_not_found(current_user: User) -> None:
 
     assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
     session.delete.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_run_agents_success(current_user: User) -> None:
+    db_project = _project(owner_id=current_user.id)
+    session = AsyncMock()
+    session.execute = AsyncMock(return_value=_execute_result(scalar=db_project))
+
+    result = await run_agents(db_project.id, session, current_user)
+
+    session.execute.assert_awaited_once()
+    assert isinstance(result, AgentRunRead)
+    assert result.project_id == db_project.id
+    assert result.message == _STUB_MESSAGE
+
+
+@pytest.mark.asyncio
+async def test_run_agents_not_found(current_user: User) -> None:
+    session = AsyncMock()
+    session.execute = AsyncMock(return_value=_execute_result(scalar=None))
+
+    with pytest.raises(HTTPException) as exc_info:
+        await run_agents(uuid4(), session, current_user)
+
+    assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
 
 
 @pytest.mark.asyncio

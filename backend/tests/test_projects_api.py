@@ -227,3 +227,37 @@ def test_delete_project_conflict_when_it_has_sprints(api_client: TestClient) -> 
     response = api_client.delete(f"/api/v1/projects/{created['id']}")
     assert response.status_code == status.HTTP_409_CONFLICT
     assert "sprints" in response.json()["detail"]
+
+
+_STUB_MESSAGE = "Agent runtime is not implemented yet for this project."
+
+
+def test_run_agents_unauthenticated(api_client: TestClient) -> None:
+    response = api_client.post(f"/api/v1/projects/{uuid4()}/agents/run")
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+def test_run_agents(api_client: TestClient) -> None:
+    _register_test_user(api_client)
+    created = _create_project(api_client)
+
+    response = api_client.post(f"/api/v1/projects/{created['id']}/agents/run")
+    assert response.status_code == status.HTTP_200_OK
+    body = response.json()
+    assert body["project_id"] == created["id"]
+    assert body["message"] == _STUB_MESSAGE
+
+
+def test_run_agents_not_found(api_client: TestClient) -> None:
+    _register_test_user(api_client)
+    response = api_client.post(f"/api/v1/projects/{uuid4()}/agents/run")
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_run_agents_hides_other_users_project(api_client: TestClient) -> None:
+    _register_test_user(api_client)
+    created = _create_project(api_client)
+    _register_test_user(api_client)
+
+    response = api_client.post(f"/api/v1/projects/{created['id']}/agents/run")
+    assert response.status_code == status.HTTP_404_NOT_FOUND

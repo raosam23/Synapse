@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     SALT_ROUNDS: int = 12
 
+    # OpenAI settings
+    OPENAI_API_KEY: str | None = None
+    LLM_MODEL: str = "gpt-4o-mini"
+
     class Config:
         """Configuration for the application"""
 

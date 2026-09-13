@@ -90,5 +90,6 @@ class ProjectUpdate(BaseModel):
 
 class AgentRunRead(BaseModel):
     """Pydantic schema for reading an agent run."""
+
     project_id: UUID = Field(description="The id of the project.")
     message: str = Field(description="The message of the agent run.")

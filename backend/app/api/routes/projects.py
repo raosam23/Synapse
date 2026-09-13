@@ -9,11 +9,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from app.agents.graph import run_stub
 from app.core.security import get_current_user
 from app.db.session import get_session
 from app.models import Project, User
 from app.schemas.project import AgentRunRead, ProjectCreate, ProjectRead, ProjectUpdate
-from app.agents.graph import run_stub
 
 router = APIRouter()
 
@@ -176,7 +176,11 @@ async def delete_project(
         ) from exc
 
 
-@router.post("/{project_id}/agents/run", status_code=status.HTTP_200_OK, response_model=AgentRunRead)
+@router.post(
+    "/{project_id}/agents/run",
+    status_code=status.HTTP_200_OK,
+    response_model=AgentRunRead,
+)
 async def run_agents(
     project_id: UUID,
     session: Session,
@@ -195,6 +199,6 @@ async def run_agents(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Project with id {project_id} not found.",
         )
-    
+
     result = run_stub(project.id)
     return AgentRunRead(project_id=project.id, message=result["message"])

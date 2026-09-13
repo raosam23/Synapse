@@ -86,3 +86,10 @@ class ProjectUpdate(BaseModel):
                 "Null is not allowed, omit the field to leave it unchanged"
             )
         return value
+
+
+class AgentRunRead(BaseModel):
+    """Pydantic schema for reading an agent run."""
+
+    project_id: UUID = Field(description="The id of the project.")
+    message: str = Field(description="The message of the agent run.")

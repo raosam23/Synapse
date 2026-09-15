@@ -1,6 +1,6 @@
 """Unit tests for project CRUD routes."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -18,9 +18,7 @@ from app.api.routes.projects import (
 )
 from app.models.project import Project, ProjectStatus
 from app.models.user import User
-from app.schemas.project import AgentRunRead, ProjectCreate, ProjectRead, ProjectUpdate
-
-_STUB_MESSAGE = "Agent runtime is not implemented yet for this project."
+from app.schemas.project import ProjectCreate, ProjectRead, ProjectUpdate
 
 
 def _execute_result(*, scalar: object) -> MagicMock:
@@ -199,12 +197,27 @@ async def test_run_agents_success(current_user: User) -> None:
     session = AsyncMock()
     session.execute = AsyncMock(return_value=_execute_result(scalar=db_project))
 
-    result = await run_agents(db_project.id, session, current_user)
+    fake_graph = {
+        "opinion": "Looks feasible",
+        "tasks": [
+            {
+                "title": "[Feature]: Example task",
+                "description": "*" * 700,
+                "story_points": 3,
+            }
+        ],
+    }
 
-    session.execute.assert_awaited_once()
-    assert isinstance(result, AgentRunRead)
+    with patch(
+        "app.api.routes.projects.run_analyze_requirements", return_value=fake_graph
+    ):
+        result = await run_agents(db_project.id, session, current_user)
+
     assert result.project_id == db_project.id
-    assert result.message == _STUB_MESSAGE
+    assert "1 backlog" in result.message
+    assert db_project.ai_opinion == "Looks feasible"
+    session.add.assert_called()
+    session.commit.assert_awaited()
 
 
 @pytest.mark.asyncio

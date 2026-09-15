@@ -71,7 +71,7 @@ Status / sprint decisions that need “what happened in the real world” use **
 - **Sprint Planner** — fill sprints by capacity (story points), assign to team members, pull next work when capacity frees up
 - **Risk Analyzer** — flag delivery risk on tasks / plan
 
-**Runtime (stub):** LangGraph lives in `backend/app/agents/graph.py`. `POST /api/v1/projects/{project_id}/agents/run` (cookie auth; same owner check as `GET /projects/{id}`) loads the project and invokes a one-node graph that returns a placeholder message. It does **not** call an LLM, write `ai_opinion`, or create tasks. `OPENAI_API_KEY` and `LLM_MODEL` are in `.env.example` for later agent tickets; the key is optional so pytest/CI run without a provider. Real analysis is #60–#62.
+**Runtime:** LangGraph lives in `backend/app/agents/graph.py`. `POST /api/v1/projects/{project_id}/agents/run` (cookie auth; same owner check as `GET /projects/{id}`) runs the **Requirement Analyzer**: writes `Project.ai_opinion` and creates tasks as `backlog` (`sprint_id` null, story points when estimated). Tests mock the LLM so pytest/CI run without a provider. Live runs need `OPENAI_API_KEY` (`LLM_MODEL` defaults in `.env.example`). Sprint fill is #61; risk flags are #62.
 
 ### Authentication (v1.0.0)
 

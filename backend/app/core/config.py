@@ -27,7 +27,7 @@ class Settings(BaseSettings):
 
     # OpenAI settings
     OPENAI_API_KEY: str | None = None
-    LLM_MODEL: str = "gpt-4o-mini"
+    LLM_MODEL: str = "gpt-4o"
 
     class Config:
         """Configuration for the application"""

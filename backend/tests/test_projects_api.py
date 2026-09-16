@@ -276,6 +276,9 @@ def test_run_agents(api_client: TestClient) -> None:
     assert all(task["status"] == "backlog" for task in tasks)
     assert all(task["sprint_id"] is None for task in tasks)
 
+    second = api_client.post(f"/api/v1/projects/{created['id']}/agents/run")
+    assert second.status_code == status.HTTP_409_CONFLICT
+
 
 def test_run_agents_not_found(api_client: TestClient) -> None:
     _register_test_user(api_client)

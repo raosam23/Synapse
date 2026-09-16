@@ -194,8 +194,17 @@ async def test_delete_project_not_found(current_user: User) -> None:
 @pytest.mark.asyncio
 async def test_run_agents_success(current_user: User) -> None:
     db_project = _project(owner_id=current_user.id)
+    python_member = MagicMock()
+    python_member.skills = ["Python", "SQL"]
+    sql_member = MagicMock()
+    sql_member.skills = ["SQL", "FastAPI"]
     session = AsyncMock()
-    session.execute = AsyncMock(return_value=_execute_result(scalar=db_project))
+    session.execute = AsyncMock(
+        side_effect=[
+            _execute_result(scalar=db_project),
+            _scalars_result(scalars=[python_member, sql_member]),
+        ]
+    )
 
     fake_graph = {
         "opinion": "Looks feasible",
@@ -210,14 +219,37 @@ async def test_run_agents_success(current_user: User) -> None:
 
     with patch(
         "app.api.routes.projects.run_analyze_requirements", return_value=fake_graph
-    ):
+    ) as mock_run:
         result = await run_agents(db_project.id, session, current_user)
 
     assert result.project_id == db_project.id
     assert "1 backlog" in result.message
     assert db_project.ai_opinion == "Looks feasible"
+    mock_run.assert_called_once_with(
+        db_project.id,
+        db_project.requirements,
+        db_project.duration_weeks,
+        ["Python", "SQL", "FastAPI"],
+    )
     session.add.assert_called()
     session.commit.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_run_agents_conflict_when_already_analyzed(current_user: User) -> None:
+    db_project = _project(owner_id=current_user.id, ai_opinion="Already done.")
+    session = AsyncMock()
+    session.execute = AsyncMock(return_value=_execute_result(scalar=db_project))
+
+    with (
+        patch("app.api.routes.projects.run_analyze_requirements") as mock_run,
+        pytest.raises(HTTPException) as exc_info,
+    ):
+        await run_agents(db_project.id, session, current_user)
+
+    assert exc_info.value.status_code == status.HTTP_409_CONFLICT
+    mock_run.assert_not_called()
+    session.commit.assert_not_called()
 
 
 @pytest.mark.asyncio

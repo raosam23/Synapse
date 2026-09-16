@@ -1,3 +1,4 @@
+from unittest.mock import patch
 from uuid import uuid4
 
 from fastapi import status
@@ -229,9 +230,6 @@ def test_delete_project_conflict_when_it_has_sprints(api_client: TestClient) -> 
     assert "sprints" in response.json()["detail"]
 
 
-_STUB_MESSAGE = "Agent runtime is not implemented yet for this project."
-
-
 def test_run_agents_unauthenticated(api_client: TestClient) -> None:
     response = api_client.post(f"/api/v1/projects/{uuid4()}/agents/run")
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -240,12 +238,46 @@ def test_run_agents_unauthenticated(api_client: TestClient) -> None:
 def test_run_agents(api_client: TestClient) -> None:
     _register_test_user(api_client)
     created = _create_project(api_client)
+    fake = {
+        "opinion": "Looks feasible.",
+        "tasks": [
+            {
+                "title": "[Feature]: One",
+                "description": "x" * 700,
+                "story_points": 3,
+            },
+            {
+                "title": "[Feature]: Two",
+                "description": "y" * 700,
+                "story_points": 5,
+            },
+        ],
+    }
 
-    response = api_client.post(f"/api/v1/projects/{created['id']}/agents/run")
+    with patch(
+        "app.api.routes.projects.run_analyze_requirements",
+        return_value=fake,
+    ):
+        response = api_client.post(f"/api/v1/projects/{created['id']}/agents/run")
+
     assert response.status_code == status.HTTP_200_OK
     body = response.json()
     assert body["project_id"] == created["id"]
-    assert body["message"] == _STUB_MESSAGE
+    assert "2 backlog" in body["message"]
+
+    project = api_client.get(f"/api/v1/projects/{created['id']}").json()
+    assert project["ai_opinion"] == "Looks feasible."
+
+    tasks = api_client.get(
+        "/api/v1/tasks/",
+        params={"project_id": created["id"]},
+    ).json()
+    assert len(tasks) == 2
+    assert all(task["status"] == "backlog" for task in tasks)
+    assert all(task["sprint_id"] is None for task in tasks)
+
+    second = api_client.post(f"/api/v1/projects/{created['id']}/agents/run")
+    assert second.status_code == status.HTTP_409_CONFLICT
 
 
 def test_run_agents_not_found(api_client: TestClient) -> None:

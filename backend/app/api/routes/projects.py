@@ -1,5 +1,6 @@
 """Routes for projects."""
 
+import asyncio
 from datetime import datetime
 from typing import Annotated
 from uuid import UUID
@@ -9,10 +10,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.agents.graph import run_stub
+from app.agents.graph import run_analyze_requirements
 from app.core.security import get_current_user
 from app.db.session import get_session
-from app.models import Project, User
+from app.models import Project, Task, TeamMember, User
+from app.models.task import TaskStatus
 from app.schemas.project import AgentRunRead, ProjectCreate, ProjectRead, ProjectUpdate
 
 router = APIRouter()
@@ -186,6 +188,14 @@ async def run_agents(
     session: Session,
     current_user: CurrentUser,
 ) -> AgentRunRead:
+    """Run the Requirement Analyzer for a project.
+    Args:
+        project_id: The id of the project to analyze.
+        session: The database session.
+        current_user: The current user.
+    Returns:
+        AgentRunRead: How many backlog tasks were created.
+    """
     project_proxy = await session.execute(
         select(Project).where(
             Project.created_by_id == current_user.id,
@@ -200,5 +210,52 @@ async def run_agents(
             detail=f"Project with id {project_id} not found.",
         )
 
-    result = run_stub(project.id)
-    return AgentRunRead(project_id=project.id, message=result["message"])
+    if project.ai_opinion is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Project has already been analyzed.",
+        )
+
+    members_proxy = await session.execute(
+        select(TeamMember).where(TeamMember.project_id == project.id)
+    )
+    team_skills: list[str] = []
+    for member in members_proxy.scalars().all():
+        for skill in member.skills or []:
+            if skill not in team_skills:
+                team_skills.append(skill)
+
+    project_name = project.name
+    result = await asyncio.to_thread(
+        run_analyze_requirements,
+        project.id,
+        project.requirements,
+        project.duration_weeks,
+        team_skills,
+    )
+
+    project.ai_opinion = result["opinion"]
+    session.add(project)
+
+    for draft in result["tasks"]:
+        session.add(
+            Task(
+                title=draft["title"],
+                description=draft["description"],
+                status=TaskStatus.BACKLOG,
+                sprint_id=None,
+                story_points=draft.get("story_points"),
+                project_id=project.id,
+                created_by_id=current_user.id,
+            )
+        )
+
+    await session.commit()
+
+    return AgentRunRead(
+        project_id=project.id,
+        message=(
+            f"Created {len(result['tasks'])} backlog tasks "
+            f"for the project {project_name}."
+        ),
+    )

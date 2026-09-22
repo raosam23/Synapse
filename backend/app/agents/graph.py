@@ -5,6 +5,8 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from app.agents.analyzer import analyze_requirements
+from app.agents.planner import plan_sprint
+from app.models import Task, TeamMember
 
 
 class StubState(TypedDict):
@@ -56,5 +58,54 @@ def run_analyze_requirements(
             "team_skills": team_skills,
             "opinion": "",
             "tasks": [],
+        }
+    )
+
+
+class PlanState(TypedDict):
+    """State for the plan sprint agent"""
+
+    tasks: list[Task]
+    members: list[TeamMember]
+    assignments: list[dict[str, Any]]
+
+
+def plan_sprint_node(state: PlanState) -> PlanState:
+    """Plan a sprint by assigning tasks to team members"""
+    assignments = plan_sprint(tasks=state["tasks"], members=state["members"])
+    return {
+        "assignments": [
+            assignment.model_dump() for assignment in assignments.assignments
+        ]
+    }
+
+
+def _build_plan_sprint_graph() -> CompiledStateGraph[PlanState]:
+    """Build the graph for the plan sprint agent"""
+    graph = StateGraph(PlanState)
+    graph.add_node("plan_sprint_node", plan_sprint_node)
+    graph.add_edge(START, "plan_sprint_node")
+    graph.add_edge("plan_sprint_node", END)
+    return graph.compile()
+
+
+compiled_plan_sprint_graph = _build_plan_sprint_graph()
+
+
+def run_plan_sprint(tasks: list[Task], members: list[TeamMember]) -> dict[str, Any]:
+    """Run the plan sprint agent.
+
+    Args:
+        tasks: List of tasks to assign.
+        members: List of team members.
+
+    Returns:
+        dict[str, Any]: The assignments.
+    """
+    return compiled_plan_sprint_graph.invoke(
+        {
+            "tasks": tasks,
+            "members": members,
+            "assignments": [],
         }
     )

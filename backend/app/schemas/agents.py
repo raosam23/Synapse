@@ -1,5 +1,7 @@
 """Schemas for the agents."""
 
+from uuid import UUID
+
 from pydantic import BaseModel, Field
 
 
@@ -40,3 +42,16 @@ class RequirementAnalysis(BaseModel):
     tasks: list[BacklogTaskDraft] = Field(
         description="The tasks that are part of the requirement analysis."
     )
+
+
+class SprintAssignment(BaseModel):
+    """Pydantic schema for a sprint assignment."""
+
+    task_id: UUID
+    member_id: UUID
+
+
+class SprintPlan(BaseModel):
+    """Pydantic schema for a sprint plan."""
+
+    assignments: list[SprintAssignment]

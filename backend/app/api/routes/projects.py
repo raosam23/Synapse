@@ -8,12 +8,16 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select
+from sqlmodel import col, select
 
-from app.agents.graph import run_analyze_requirements
+from app.agents.capacity import (
+    POINTS_PER_PERSON_PER_SPRINT,
+    select_tasks_for_capacity,
+)
+from app.agents.graph import run_analyze_requirements, run_plan_sprint
 from app.core.security import get_current_user
 from app.db.session import get_session
-from app.models import Project, Task, TeamMember, User
+from app.models import Project, Sprint, Task, TeamMember, User
 from app.models.task import TaskStatus
 from app.schemas.project import AgentRunRead, ProjectCreate, ProjectRead, ProjectUpdate
 
@@ -258,4 +262,145 @@ async def run_agents(
             f"Created {len(result['tasks'])} backlog tasks "
             f"for the project {project_name}."
         ),
+    )
+
+
+@router.post(
+    "/{project_id}/agents/plan-sprint",
+    status_code=status.HTTP_200_OK,
+    response_model=AgentRunRead,
+)
+async def plan_sprint_agent(
+    project_id: UUID,
+    session: Session,
+    current_user: CurrentUser,
+) -> AgentRunRead:
+    """Plan a sprint for a project.
+    Args:
+        project_id: The id of the project to plan a sprint for.
+        session: The database session.
+        current_user: The current user.
+    Returns:
+        AgentRunRead: How many backlog tasks were planned and assigned to team members.
+    """
+    project_proxy = await session.execute(
+        select(Project).where(
+            Project.created_by_id == current_user.id,
+            Project.id == project_id,
+        )
+    )
+    project = project_proxy.scalar_one_or_none()
+    if project is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Project with id {project_id} not found.",
+        )
+
+    if project.ai_opinion is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Project has not been analyzed.",
+        )
+
+    members_proxy = await session.execute(
+        select(TeamMember).where(TeamMember.project_id == project.id)
+    )
+    members = [
+        member for member in members_proxy.scalars().all() if member.user_id is not None
+    ]
+    if len(members) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Project has no team members.",
+        )
+
+    tasks_proxy = await session.execute(
+        select(Task).where(
+            Task.project_id == project.id,
+            Task.status == TaskStatus.BACKLOG,
+            col(Task.sprint_id).is_(None),
+        )
+    )
+    backlog = list(tasks_proxy.scalars().all())
+
+    if len(backlog) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Project has no backlog tasks.",
+        )
+
+    sprint_proxy = await session.execute(
+        select(Sprint)
+        .where(
+            Sprint.project_id == project.id,
+        )
+        .order_by(Sprint.index)
+        .limit(1)
+    )
+
+    sprint = sprint_proxy.scalar_one_or_none()
+
+    if sprint is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Project has no sprints.",
+        )
+
+    in_sprint_proxy = await session.execute(
+        select(Task).where(Task.sprint_id == sprint.id)
+    )
+    in_sprint = list(in_sprint_proxy.scalars().all())
+
+    remaining = {member.id: POINTS_PER_PERSON_PER_SPRINT for member in members}
+    for task in in_sprint:
+        if task.assignee_id is None or task.assignee_id not in remaining:
+            continue
+        remaining[task.assignee_id] = max(
+            0, remaining[task.assignee_id] - (task.story_points or 0)
+        )
+
+    leftover = sum(remaining.values())
+    max_person_remaining = max(remaining.values()) if remaining else 0
+    candidates = select_tasks_for_capacity(
+        backlog,
+        leftover,
+        max_task_points=max_person_remaining,
+    )
+
+    result = await asyncio.to_thread(
+        run_plan_sprint,
+        candidates,
+        members,
+    )
+
+    task_by_id = {task.id: task for task in candidates}
+    members_by_id = {member.id: member for member in members}
+
+    assigned_count = 0
+    assigned_task_ids: set[UUID] = set()
+    for assignment in result["assignments"]:
+        task = task_by_id.get(assignment["task_id"])
+        member = members_by_id.get(assignment["member_id"])
+        if task is None or member is None:
+            continue
+        if task.id in assigned_task_ids:
+            continue
+
+        points = task.story_points or 0
+        if remaining[member.id] < points:
+            continue
+        remaining[member.id] -= points
+
+        task.assignee_id = member.id
+        task.sprint_id = sprint.id
+        task.status = TaskStatus.TODO
+        session.add(task)
+        assigned_task_ids.add(task.id)
+        assigned_count += 1
+
+    await session.commit()
+
+    return AgentRunRead(
+        project_id=project.id,
+        message=f"Assigned {assigned_count} tasks into sprint {sprint.index}.",
     )

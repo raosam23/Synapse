@@ -360,7 +360,12 @@ async def plan_sprint_agent(
         )
 
     leftover = sum(remaining.values())
-    candidates = select_tasks_for_capacity(backlog, leftover)
+    max_person_remaining = max(remaining.values()) if remaining else 0
+    candidates = select_tasks_for_capacity(
+        backlog,
+        leftover,
+        max_task_points=max_person_remaining,
+    )
 
     result = await asyncio.to_thread(
         run_plan_sprint,
@@ -372,10 +377,13 @@ async def plan_sprint_agent(
     members_by_id = {member.id: member for member in members}
 
     assigned_count = 0
+    assigned_task_ids: set[UUID] = set()
     for assignment in result["assignments"]:
         task = task_by_id.get(assignment["task_id"])
         member = members_by_id.get(assignment["member_id"])
         if task is None or member is None:
+            continue
+        if task.id in assigned_task_ids:
             continue
 
         points = task.story_points or 0
@@ -387,6 +395,7 @@ async def plan_sprint_agent(
         task.sprint_id = sprint.id
         task.status = TaskStatus.TODO
         session.add(task)
+        assigned_task_ids.add(task.id)
         assigned_count += 1
 
     await session.commit()

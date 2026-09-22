@@ -420,6 +420,79 @@ def test_plan_sprint(api_client: TestClient) -> None:
     assert leftover["assignee_id"] is None
 
 
+def test_plan_sprint_ignores_duplicate_task_assignments(
+    api_client: TestClient,
+) -> None:
+    user = _register_test_user(api_client)
+    created = _create_project(api_client)
+    assert (
+        api_client.put(
+            f"/api/v1/projects/{created['id']}",
+            json={"ai_opinion": "Looks feasible."},
+        ).status_code
+        == status.HTTP_200_OK
+    )
+    member = api_client.post(
+        "/api/v1/team-members/",
+        json={
+            "skills": ["Python"],
+            "user_id": user["id"],
+            "project_id": created["id"],
+        },
+    ).json()
+    assert (
+        api_client.post(
+            "/api/v1/sprints/",
+            json={"project_id": created["id"], "start_date": "2026-04-06"},
+        ).status_code
+        == status.HTTP_201_CREATED
+    )
+    task = api_client.post(
+        "/api/v1/tasks/",
+        json={
+            "title": "[Feature]: Once only",
+            "project_id": created["id"],
+            "story_points": 3,
+        },
+    ).json()
+    other = api_client.post(
+        "/api/v1/tasks/",
+        json={
+            "title": "[Feature]: Spare capacity",
+            "project_id": created["id"],
+            "story_points": 3,
+        },
+    ).json()
+
+    fake = {
+        "assignments": [
+            {"task_id": UUID(task["id"]), "member_id": UUID(member["id"])},
+            {"task_id": UUID(task["id"]), "member_id": UUID(member["id"])},
+            {"task_id": UUID(other["id"]), "member_id": UUID(member["id"])},
+        ]
+    }
+    with patch(
+        "app.api.routes.projects.run_plan_sprint",
+        return_value=fake,
+    ):
+        response = api_client.post(
+            f"/api/v1/projects/{created['id']}/agents/plan-sprint"
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    # Duplicate row must not inflate the count (2 unique tasks, not 3).
+    assert "Assigned 2" in response.json()["message"]
+
+    tasks = api_client.get(
+        "/api/v1/tasks/",
+        params={"project_id": created["id"]},
+    ).json()
+    by_id = {t["id"]: t for t in tasks}
+    assert by_id[task["id"]]["status"] == "todo"
+    assert by_id[other["id"]]["status"] == "todo"
+    assert by_id[task["id"]]["assignee_id"] == member["id"]
+
+
 def test_plan_sprint_second_run_respects_remaining_capacity(
     api_client: TestClient,
 ) -> None:

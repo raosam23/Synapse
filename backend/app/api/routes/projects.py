@@ -12,6 +12,8 @@ from sqlmodel import col, select
 
 from app.agents.capacity import (
     POINTS_PER_PERSON_PER_SPRINT,
+    days_left_in_sprint,
+    pull_into_current_sprint,
     select_tasks_for_capacity,
 )
 from app.agents.graph import run_analyze_requirements, run_plan_sprint
@@ -346,13 +348,27 @@ async def plan_sprint_agent(
             detail="Project has no sprints.",
         )
 
+    target_sprint = sprint
+    if not pull_into_current_sprint(days_left_in_sprint(sprint.end_date)):
+        next_sprint_proxy = await session.execute(
+            select(Sprint).where(
+                Sprint.project_id == project.id,
+                Sprint.index == sprint.index + 1,
+            )
+        )
+        next_sprint = next_sprint_proxy.scalar_one_or_none()
+        if next_sprint is not None:
+            target_sprint = next_sprint
+
     in_sprint_proxy = await session.execute(
-        select(Task).where(Task.sprint_id == sprint.id)
+        select(Task).where(Task.sprint_id == target_sprint.id)
     )
     in_sprint = list(in_sprint_proxy.scalars().all())
 
     remaining = {member.id: POINTS_PER_PERSON_PER_SPRINT for member in members}
     for task in in_sprint:
+        if task.status == TaskStatus.DONE:
+            continue
         if task.assignee_id is None or task.assignee_id not in remaining:
             continue
         remaining[task.assignee_id] = max(
@@ -392,7 +408,7 @@ async def plan_sprint_agent(
         remaining[member.id] -= points
 
         task.assignee_id = member.id
-        task.sprint_id = sprint.id
+        task.sprint_id = target_sprint.id
         task.status = TaskStatus.TODO
         session.add(task)
         assigned_task_ids.add(task.id)
@@ -402,5 +418,5 @@ async def plan_sprint_agent(
 
     return AgentRunRead(
         project_id=project.id,
-        message=f"Assigned {assigned_count} tasks into sprint {sprint.index}.",
+        message=(f"Assigned {assigned_count} tasks into sprint {target_sprint.index}."),
     )

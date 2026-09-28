@@ -1,10 +1,25 @@
+from datetime import UTC, date, datetime
+
 from app.models.task import Task
 
 POINTS_PER_PERSON_PER_SPRINT = 8
 
 
 def sprint_capacity(member_count: int) -> int:
+    """Calculate the capacity of a sprint for a team."""
     return member_count * POINTS_PER_PERSON_PER_SPRINT
+
+
+def days_left_in_sprint(end_date: date, today: date | None = None) -> int:
+    """Inclusive days remaining in a sprint (0 if the window has ended)."""
+    if today is None:
+        today = datetime.now(UTC).date()
+    return max(0, (end_date - today).days + 1)
+
+
+def pull_into_current_sprint(days_left: int) -> bool:
+    """Pull into the current sprint when at least half of a 2-week window remains."""
+    return days_left >= 7
 
 
 def select_tasks_for_capacity(

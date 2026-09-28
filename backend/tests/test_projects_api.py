@@ -390,9 +390,15 @@ def test_plan_sprint(api_client: TestClient) -> None:
         ]
     }
 
-    with patch(
-        "app.api.routes.projects.run_plan_sprint",
-        return_value=fake,
+    with (
+        patch(
+            "app.api.routes.projects.days_left_in_sprint",
+            return_value=14,
+        ),
+        patch(
+            "app.api.routes.projects.run_plan_sprint",
+            return_value=fake,
+        ),
     ):
         response = api_client.post(
             f"/api/v1/projects/{created['id']}/agents/plan-sprint"
@@ -418,6 +424,70 @@ def test_plan_sprint(api_client: TestClient) -> None:
     assert leftover["status"] == "backlog"
     assert leftover["sprint_id"] is None
     assert leftover["assignee_id"] is None
+
+
+def test_plan_sprint_pulls_into_next_sprint_when_current_is_almost_over(
+    api_client: TestClient,
+) -> None:
+    user = _register_test_user(api_client)
+    created = _create_project(api_client)
+    assert (
+        api_client.put(
+            f"/api/v1/projects/{created['id']}",
+            json={"ai_opinion": "Looks feasible."},
+        ).status_code
+        == status.HTTP_200_OK
+    )
+    member = api_client.post(
+        "/api/v1/team-members/",
+        json={
+            "skills": ["Python"],
+            "user_id": user["id"],
+            "project_id": created["id"],
+        },
+    ).json()
+    sprints_response = api_client.post(
+        "/api/v1/sprints/",
+        json={"project_id": created["id"], "start_date": "2026-04-06"},
+    )
+    assert sprints_response.status_code == status.HTTP_201_CREATED
+    first_sprint, second_sprint = sprints_response.json()[:2]
+    task = api_client.post(
+        "/api/v1/tasks/",
+        json={
+            "title": "[Feature]: Late pull",
+            "project_id": created["id"],
+            "story_points": 3,
+        },
+    ).json()
+    fake = {
+        "assignments": [{"task_id": UUID(task["id"]), "member_id": UUID(member["id"])}]
+    }
+
+    with (
+        patch(
+            "app.api.routes.projects.days_left_in_sprint",
+            return_value=3,
+        ),
+        patch(
+            "app.api.routes.projects.run_plan_sprint",
+            return_value=fake,
+        ),
+    ):
+        response = api_client.post(
+            f"/api/v1/projects/{created['id']}/agents/plan-sprint"
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert "sprint 2" in response.json()["message"]
+    body = api_client.get(
+        "/api/v1/tasks/",
+        params={"project_id": created["id"]},
+    ).json()
+    assigned = next(t for t in body if t["id"] == task["id"])
+    assert assigned["status"] == "todo"
+    assert assigned["sprint_id"] == second_sprint["id"]
+    assert assigned["sprint_id"] != first_sprint["id"]
 
 
 def test_plan_sprint_ignores_duplicate_task_assignments(
@@ -471,9 +541,15 @@ def test_plan_sprint_ignores_duplicate_task_assignments(
             {"task_id": UUID(other["id"]), "member_id": UUID(member["id"])},
         ]
     }
-    with patch(
-        "app.api.routes.projects.run_plan_sprint",
-        return_value=fake,
+    with (
+        patch(
+            "app.api.routes.projects.days_left_in_sprint",
+            return_value=14,
+        ),
+        patch(
+            "app.api.routes.projects.run_plan_sprint",
+            return_value=fake,
+        ),
     ):
         response = api_client.post(
             f"/api/v1/projects/{created['id']}/agents/plan-sprint"
@@ -539,13 +615,19 @@ def test_plan_sprint_second_run_respects_remaining_capacity(
         },
     ).json()
 
-    with patch(
-        "app.api.routes.projects.run_plan_sprint",
-        return_value={
-            "assignments": [
-                {"task_id": UUID(first["id"]), "member_id": UUID(member["id"])}
-            ]
-        },
+    with (
+        patch(
+            "app.api.routes.projects.days_left_in_sprint",
+            return_value=14,
+        ),
+        patch(
+            "app.api.routes.projects.run_plan_sprint",
+            return_value={
+                "assignments": [
+                    {"task_id": UUID(first["id"]), "member_id": UUID(member["id"])}
+                ]
+            },
+        ),
     ):
         first_run = api_client.post(
             f"/api/v1/projects/{created['id']}/agents/plan-sprint"
@@ -553,14 +635,20 @@ def test_plan_sprint_second_run_respects_remaining_capacity(
     assert first_run.status_code == status.HTTP_200_OK
     assert "Assigned 1" in first_run.json()["message"]
 
-    with patch(
-        "app.api.routes.projects.run_plan_sprint",
-        return_value={
-            "assignments": [
-                {"task_id": UUID(second["id"]), "member_id": UUID(member["id"])}
-            ]
-        },
-    ) as mocked:
+    with (
+        patch(
+            "app.api.routes.projects.days_left_in_sprint",
+            return_value=14,
+        ),
+        patch(
+            "app.api.routes.projects.run_plan_sprint",
+            return_value={
+                "assignments": [
+                    {"task_id": UUID(second["id"]), "member_id": UUID(member["id"])}
+                ]
+            },
+        ) as mocked,
+    ):
         second_run = api_client.post(
             f"/api/v1/projects/{created['id']}/agents/plan-sprint"
         )

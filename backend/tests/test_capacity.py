@@ -1,8 +1,14 @@
 """Unit tests for sprint capacity rules (no LLM, no DB)."""
 
+from datetime import date
 from uuid import uuid4
 
-from app.agents.capacity import select_tasks_for_capacity, sprint_capacity
+from app.agents.capacity import (
+    days_left_in_sprint,
+    pull_into_current_sprint,
+    select_tasks_for_capacity,
+    sprint_capacity,
+)
 from app.models.task import Task
 
 
@@ -38,3 +44,15 @@ def test_select_skips_task_above_max_person_remaining() -> None:
         max_task_points=8,
     )
     assert selected == [small]
+
+
+def test_days_left_in_sprint_is_inclusive() -> None:
+    assert days_left_in_sprint(date(2026, 4, 19), today=date(2026, 4, 19)) == 1
+    assert days_left_in_sprint(date(2026, 4, 19), today=date(2026, 4, 20)) == 0
+    assert days_left_in_sprint(date(2026, 4, 19), today=date(2026, 4, 13)) == 7
+
+
+def test_pull_into_current_sprint_uses_seven_day_cutoff() -> None:
+    assert pull_into_current_sprint(7) is True
+    assert pull_into_current_sprint(14) is True
+    assert pull_into_current_sprint(6) is False

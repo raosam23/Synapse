@@ -68,13 +68,13 @@ Status / sprint decisions that need “what happened in the real world” use **
 ### Agents (v1.0.0)
 
 - **Requirement Analyzer** — parse requirements, opinion/analysis, create backlog tasks + estimates
-- **Sprint Planner** — fill sprints by capacity (story points), assign to team members; pull next work when capacity frees up is [#72](https://github.com/raosam23/Synapse/issues/72)
+- **Sprint Planner** — fill sprints by capacity (story points), assign to team members, pull next work when capacity frees up ([#72](https://github.com/raosam23/Synapse/issues/72))
 - **Risk Analyzer** — flag delivery risk on tasks / plan
 
 **Runtime:** LangGraph lives in `backend/app/agents/graph.py`.
 
 - `POST /api/v1/projects/{project_id}/agents/run` (cookie auth; same owner check as `GET /projects/{id}`) runs the **Requirement Analyzer**: writes `Project.ai_opinion` and creates tasks as `backlog` (`sprint_id` null, story points when estimated). Roster `TeamMember.skills` are passed into the prompt. A second run on the same project is `409`.
-- `POST /api/v1/projects/{project_id}/agents/plan-sprint` (same cookie auth / owner check) runs the **Sprint Planner** initial fill ([#61](https://github.com/raosam23/Synapse/issues/61)): v1 capacity is **8 story points per person per 2-week sprint**. It selects a subset of backlog tasks that fit leftover team capacity (subtracting points already on the current sprint), asks the LLM to assign by skills, then code enforces the per-person 8-point cap. Pulled tasks get `sprint_id` (first sprint by `index`), status `todo`, and `assignee_id`. Remaining work stays `backlog` with `sprint_id` null. Requires prior analysis, roster members with a linked `User`, backlog tasks, and existing sprints (`409` otherwise). Pull-from-backlog when capacity frees up is [#72](https://github.com/raosam23/Synapse/issues/72).
+- `POST /api/v1/projects/{project_id}/agents/plan-sprint` (same cookie auth / owner check) runs the **Sprint Planner** ([#61](https://github.com/raosam23/Synapse/issues/61), [#72](https://github.com/raosam23/Synapse/issues/72)): v1 capacity is **8 story points per person per 2-week sprint**. It selects a subset of backlog tasks that fit leftover team capacity on the **target** sprint (subtracting points already on that sprint, ignoring `done`). If **7 or more days** remain in the first sprint (inclusive of `end_date`), the target is that sprint; otherwise it is the **next** sprint by `index` (stays on the current sprint if there is no next). The LLM assigns by skills; code enforces the per-person 8-point cap. Pulled tasks get `sprint_id`, status `todo`, and `assignee_id`. Remaining work stays `backlog` with `sprint_id` null. Requires prior analysis, roster members with a linked `User`, backlog tasks, and existing sprints (`409` otherwise).
 
 Tests mock the LLM so pytest/CI run without a provider. Live runs need `OPENAI_API_KEY` (`LLM_MODEL` defaults in `.env.example`). Risk flags are #62.
 

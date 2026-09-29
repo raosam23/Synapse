@@ -55,3 +55,16 @@ class SprintPlan(BaseModel):
     """Pydantic schema for a sprint plan."""
 
     assignments: list[SprintAssignment]
+
+
+class TaskRiskFlag(BaseModel):
+    """One task with a delivery date risk flag."""
+
+    task_id: UUID
+    risk_flag: bool
+
+
+class RiskAnalysis(BaseModel):
+    """Flags for every task the risk analyzer considered."""
+
+    flags: list[TaskRiskFlag]

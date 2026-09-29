@@ -16,10 +16,14 @@ from app.agents.capacity import (
     pull_into_current_sprint,
     select_tasks_for_capacity,
 )
-from app.agents.graph import run_analyze_requirements, run_plan_sprint
+from app.agents.graph import (
+    run_analyze_requirements,
+    run_analyze_risks,
+    run_plan_sprint,
+)
 from app.core.security import get_current_user
 from app.db.session import get_session
-from app.models import Project, Sprint, Task, TeamMember, User
+from app.models import Comment, Project, Sprint, Task, TeamMember, User
 from app.models.task import TaskStatus
 from app.schemas.project import AgentRunRead, ProjectCreate, ProjectRead, ProjectUpdate
 
@@ -419,4 +423,65 @@ async def plan_sprint_agent(
     return AgentRunRead(
         project_id=project.id,
         message=(f"Assigned {assigned_count} tasks into sprint {target_sprint.index}."),
+    )
+
+
+@router.post(
+    "/{project_id}/agents/analyze-risk",
+    status_code=status.HTTP_200_OK,
+    response_model=AgentRunRead,
+)
+async def analyze_risk_agent(
+    project_id: UUID,
+    session: Session,
+    current_user: CurrentUser,
+) -> AgentRunRead:
+    """Flag delivery risk on a project's tasks."""
+    project_proxy = await session.execute(
+        select(Project).where(
+            Project.created_by_id == current_user.id,
+            Project.id == project_id,
+        )
+    )
+    project = project_proxy.scalar_one_or_none()
+    if project is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Project with id {project_id} not found.",
+        )
+    task_proxy = await session.execute(
+        select(Task).where(
+            Task.project_id == project.id,
+        )
+    )
+    tasks = list(task_proxy.scalars().all())
+    if len(tasks) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Project has no tasks.",
+        )
+    comments_proxy = await session.execute(
+        select(Comment).where(col(Comment.task_id).in_([task.id for task in tasks]))
+    )
+    comments = list(comments_proxy.scalars().all())
+    result = await asyncio.to_thread(
+        run_analyze_risks,
+        tasks,
+        comments,
+    )
+    task_by_id = {task.id: task for task in tasks}
+    flagged_count = 0
+    for flag in result["flags"]:
+        task = task_by_id.get(flag["task_id"])
+        if task is None:
+            continue
+        task.risk_flag = flag["risk_flag"]
+        session.add(task)
+        flagged_count += 1
+
+    await session.commit()
+
+    return AgentRunRead(
+        project_id=project.id,
+        message=f"Set risk flags on {flagged_count} tasks.",
     )

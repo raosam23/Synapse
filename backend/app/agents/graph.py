@@ -6,7 +6,8 @@ from langgraph.graph.state import CompiledStateGraph
 
 from app.agents.analyzer import analyze_requirements
 from app.agents.planner import plan_sprint
-from app.models import Task, TeamMember
+from app.agents.risk import analyze_risk
+from app.models import Comment, Task, TeamMember
 
 
 class StubState(TypedDict):
@@ -107,5 +108,41 @@ def run_plan_sprint(tasks: list[Task], members: list[TeamMember]) -> dict[str, A
             "tasks": tasks,
             "members": members,
             "assignments": [],
+        }
+    )
+
+
+class RiskState(TypedDict):
+    """State for the risk analyzer agent"""
+
+    tasks: list[Task]
+    comments: list[Comment]
+    flags: list[dict[str, Any]]
+
+
+def analyze_risk_node(state: RiskState) -> RiskState:
+    result = analyze_risk(tasks=state["tasks"], comments=state["comments"])
+    return {"flags": [flag.model_dump() for flag in result.flags]}
+
+
+def _build_analyze_risk_graph() -> CompiledStateGraph[RiskState]:
+    """Build the graph for the risk analyzer agent"""
+
+    graph = StateGraph(RiskState)
+    graph.add_node("analyze_risk_node", analyze_risk_node)
+    graph.add_edge(START, "analyze_risk_node")
+    graph.add_edge("analyze_risk_node", END)
+    return graph.compile()
+
+
+compiled_analyze_risk_graph = _build_analyze_risk_graph()
+
+
+def run_analyze_risks(tasks: list[Task], comments: list[Comment]) -> dict[str, Any]:
+    return compiled_analyze_risk_graph.invoke(
+        {
+            "tasks": tasks,
+            "comments": comments,
+            "flags": [],
         }
     )

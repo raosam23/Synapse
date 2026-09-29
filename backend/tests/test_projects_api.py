@@ -673,3 +673,147 @@ def test_plan_sprint_not_found(api_client: TestClient) -> None:
     _register_test_user(api_client)
     response = api_client.post(f"/api/v1/projects/{uuid4()}/agents/plan-sprint")
     assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_analyze_risk_unauthenticated(api_client: TestClient) -> None:
+    response = api_client.post(f"/api/v1/projects/{uuid4()}/agents/analyze-risk")
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+def test_analyze_risk_not_found(api_client: TestClient) -> None:
+    _register_test_user(api_client)
+    response = api_client.post(f"/api/v1/projects/{uuid4()}/agents/analyze-risk")
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_analyze_risk_requires_tasks(api_client: TestClient) -> None:
+    _register_test_user(api_client)
+    created = _create_project(api_client)
+    response = api_client.post(f"/api/v1/projects/{created['id']}/agents/analyze-risk")
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert "no tasks" in response.json()["detail"]
+
+
+def test_analyze_risk(api_client: TestClient) -> None:
+    _register_test_user(api_client)
+    created = _create_project(api_client)
+    risky = api_client.post(
+        "/api/v1/tasks/",
+        json={
+            "title": "[Feature]: Risky",
+            "project_id": created["id"],
+            "story_points": 8,
+        },
+    )
+    assert risky.status_code == status.HTTP_201_CREATED
+    safe = api_client.post(
+        "/api/v1/tasks/",
+        json={
+            "title": "[Feature]: Safe",
+            "project_id": created["id"],
+            "story_points": 1,
+        },
+    )
+    assert safe.status_code == status.HTTP_201_CREATED
+    risky_body = risky.json()
+    safe_body = safe.json()
+
+    fake = {
+        "flags": [
+            {"task_id": UUID(risky_body["id"]), "risk_flag": True},
+            {"task_id": UUID(safe_body["id"]), "risk_flag": False},
+        ]
+    }
+
+    with patch(
+        "app.api.routes.projects.run_analyze_risks",
+        return_value=fake,
+    ):
+        response = api_client.post(
+            f"/api/v1/projects/{created['id']}/agents/analyze-risk"
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    body = response.json()
+    assert body["project_id"] == created["id"]
+    assert "Set risk flags on 2" in body["message"]
+
+    tasks = api_client.get(
+        "/api/v1/tasks/",
+        params={"project_id": created["id"]},
+    ).json()
+    by_id = {task["id"]: task for task in tasks}
+    assert by_id[risky_body["id"]]["risk_flag"] is True
+    assert by_id[safe_body["id"]]["risk_flag"] is False
+
+
+def test_analyze_risk_skips_unknown_task_ids(api_client: TestClient) -> None:
+    _register_test_user(api_client)
+    created = _create_project(api_client)
+    task = api_client.post(
+        "/api/v1/tasks/",
+        json={
+            "title": "[Feature]: Known",
+            "project_id": created["id"],
+            "story_points": 3,
+        },
+    ).json()
+
+    fake = {
+        "flags": [
+            {"task_id": uuid4(), "risk_flag": True},
+            {"task_id": UUID(task["id"]), "risk_flag": True},
+        ]
+    }
+
+    with patch(
+        "app.api.routes.projects.run_analyze_risks",
+        return_value=fake,
+    ):
+        response = api_client.post(
+            f"/api/v1/projects/{created['id']}/agents/analyze-risk"
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert "Set risk flags on 1" in response.json()["message"]
+    listed = api_client.get(
+        "/api/v1/tasks/",
+        params={"project_id": created["id"]},
+    ).json()
+    assert listed[0]["risk_flag"] is True
+
+
+def test_analyze_risk_passes_comments(api_client: TestClient) -> None:
+    _register_test_user(api_client)
+    created = _create_project(api_client)
+    task = api_client.post(
+        "/api/v1/tasks/",
+        json={
+            "title": "[Feature]: Blocked",
+            "project_id": created["id"],
+            "story_points": 5,
+        },
+    ).json()
+    comment = api_client.post(
+        "/api/v1/comments/",
+        json={"task_id": task["id"], "body": "Waiting on vendor."},
+    )
+    assert comment.status_code == status.HTTP_201_CREATED
+
+    with patch(
+        "app.api.routes.projects.run_analyze_risks",
+        return_value={
+            "flags": [{"task_id": UUID(task["id"]), "risk_flag": True}],
+        },
+    ) as mocked:
+        response = api_client.post(
+            f"/api/v1/projects/{created['id']}/agents/analyze-risk"
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    mocked.assert_called_once()
+    passed_tasks, passed_comments = mocked.call_args.args
+    assert len(passed_tasks) == 1
+    assert passed_tasks[0].id == UUID(task["id"])
+    assert len(passed_comments) == 1
+    assert passed_comments[0].body == "Waiting on vendor."

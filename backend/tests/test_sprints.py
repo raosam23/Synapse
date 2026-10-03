@@ -5,6 +5,9 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
 
 import pytest
+from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
+
 from app.api.routes.sprints import (
     create_sprints,
     delete_sprint_by_id,
@@ -15,8 +18,6 @@ from app.models.project import Project
 from app.models.sprint import Sprint
 from app.models.user import User
 from app.schemas.sprint import SprintCreate, SprintRead
-from fastapi import HTTPException, status
-from sqlalchemy.exc import IntegrityError
 
 
 def _execute_result(*, scalar: object) -> MagicMock:

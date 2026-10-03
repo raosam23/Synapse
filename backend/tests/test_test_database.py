@@ -2,8 +2,9 @@
 
 from urllib.parse import urlparse
 
-from app.core.config import settings
 from sqlalchemy import create_engine, text
+
+from app.core.config import settings
 
 
 def test_pytest_does_not_use_local_dev_database() -> None:

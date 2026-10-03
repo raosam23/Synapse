@@ -7,6 +7,12 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
+from fastapi import HTTPException, status
+from fastapi.testclient import TestClient
+from jose import jwt
+from pydantic import ValidationError
+from sqlalchemy.exc import IntegrityError
+
 from app.api.routes.auth import get_me, login, logout, register
 from app.core.config import settings
 from app.core.security import create_access_token, hash_password, verify_password
@@ -15,11 +21,6 @@ from app.main import app
 from app.models import RevokedToken
 from app.models.user import User
 from app.schemas.auth import LoginRequest, RegisterRequest, UserRead
-from fastapi import HTTPException, status
-from fastapi.testclient import TestClient
-from jose import jwt
-from pydantic import ValidationError
-from sqlalchemy.exc import IntegrityError
 
 
 def _execute_result(*, scalar: object) -> MagicMock:

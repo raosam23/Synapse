@@ -10,9 +10,8 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 import sqlmodel
-from sqlalchemy.dialects import postgresql
-
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "ad878abd3458"

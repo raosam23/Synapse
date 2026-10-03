@@ -1,20 +1,9 @@
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
 
-from app.core.config import settings
+from app.agents.llm import chat_client
 from app.models.comment import Comment
 from app.models.task import Task
 from app.schemas.agents import RiskAnalysis
-
-
-def _client() -> ChatOpenAI:
-    """Build a client for the OpenAI"""
-    return ChatOpenAI(
-        model=settings.LLM_MODEL,
-        api_key=settings.OPENAI_API_KEY,
-        temperature=0.2,
-    )
-
 
 SYSTEM_PROMPT = """
 You flag delivery risk on existing tasks.
@@ -55,7 +44,7 @@ def analyze_risk(*, tasks: list[Task], comments: list[Comment]) -> RiskAnalysis:
             ),
         ]
     )
-    client = _client()
+    client = chat_client()
 
     chain = prompt | client.with_structured_output(RiskAnalysis)
     return chain.invoke(

@@ -1,10 +1,9 @@
 from uuid import uuid4
 
+from app.core.config import settings
 from fastapi import status
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
-
-from app.core.config import settings
 
 
 def _register_test_user(

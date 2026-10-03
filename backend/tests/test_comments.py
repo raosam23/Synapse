@@ -5,9 +5,6 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
 
 import pytest
-from fastapi import HTTPException, status
-from pydantic import ValidationError
-
 from app.api.routes.comments import (
     create_comment,
     delete_comment_by_id,
@@ -19,6 +16,8 @@ from app.models.comment import Comment
 from app.models.task import Task, TaskStatus
 from app.models.user import User
 from app.schemas.comment import CommentCreate, CommentRead, CommentUpdate
+from fastapi import HTTPException, status
+from pydantic import ValidationError
 
 
 def _execute_result(*, scalar: object) -> MagicMock:

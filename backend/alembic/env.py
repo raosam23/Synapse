@@ -1,8 +1,7 @@
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config, pool
-
 from alembic import context
+from sqlalchemy import engine_from_config, pool
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -25,9 +24,8 @@ config.set_main_option("sqlalchemy.url", sync_url)
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-from sqlmodel import SQLModel
-
 import app.models  # noqa: F401
+from sqlmodel import SQLModel
 
 target_metadata = SQLModel.metadata
 

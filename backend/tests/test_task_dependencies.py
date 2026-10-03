@@ -4,10 +4,6 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-from fastapi import HTTPException, status
-from pydantic import ValidationError
-from sqlalchemy.exc import IntegrityError
-
 from app.api.routes.task_dependencies import (
     create_task_dependency,
     delete_task_dependency,
@@ -18,6 +14,9 @@ from app.models.task import Task, TaskStatus
 from app.models.task_dependency import TaskDependency
 from app.models.user import User
 from app.schemas.task_dependency import TaskDependencyCreate, TaskDependencyRead
+from fastapi import HTTPException, status
+from pydantic import ValidationError
+from sqlalchemy.exc import IntegrityError
 
 
 def _execute_result(*, scalar: object) -> MagicMock:

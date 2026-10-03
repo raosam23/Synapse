@@ -7,15 +7,14 @@ from uuid import uuid4
 import pytest
 from alembic.command import upgrade as alembic_upgrade
 from alembic.config import Config
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool
-
 from app.core.config import settings
 from app.db import session as db_session
 from app.main import app
 from app.models.user import User
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, text
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 # Default local uvicorn / Swagger database from .env.example. Pytest must never
 # truncate this; use TEST_DATABASE_URL → synapse_test instead.

@@ -1,20 +1,9 @@
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
 
-from app.core.config import settings
+from app.agents.llm import chat_client
 from app.models.task import Task
 from app.models.team_member import TeamMember
 from app.schemas.agents import SprintPlan
-
-
-def _client() -> ChatOpenAI:
-    """Build a client for the OpenAI"""
-    return ChatOpenAI(
-        model=settings.LLM_MODEL,
-        api_key=settings.OPENAI_API_KEY,
-        temperature=0.2,
-    )
-
 
 SYSTEM_PROMPT = """
 You assign backlog tasks to team members for one spint.
@@ -56,7 +45,7 @@ def plan_sprint(*, tasks: list[Task], members: list[TeamMember]) -> SprintPlan:
         ]
     )
 
-    chain = prompt | _client().with_structured_output(SprintPlan)
+    chain = prompt | chat_client().with_structured_output(SprintPlan)
 
     return chain.invoke(
         {

@@ -5,9 +5,8 @@ from __future__ import annotations
 import re
 
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
 
-from app.core.config import settings
+from app.agents.llm import chat_client
 from app.schemas.agents import RequirementAnalysis
 
 SYSTEM_PROMPT = """\
@@ -47,18 +46,6 @@ the tickets, the outline, or your own process.
 """
 
 _FEATURE_PREFIX = re.compile(r"^\[feature\]:\s*", re.IGNORECASE)
-
-
-def _client() -> ChatOpenAI:
-    """Build a ChatOpenAI client from app settings.
-    Returns:
-        ChatOpenAI: Client using LLM_MODEL and OPENAI_API_KEY from env.
-    """
-    return ChatOpenAI(
-        model=settings.LLM_MODEL,
-        api_key=settings.OPENAI_API_KEY,
-        temperature=0.2,
-    )
 
 
 def feature_title(title: str) -> str:
@@ -101,7 +88,7 @@ def analyze_requirements(
             ),
         ]
     )
-    chain = prompt | _client().with_structured_output(RequirementAnalysis)
+    chain = prompt | chat_client().with_structured_output(RequirementAnalysis)
     result = chain.invoke(
         {
             "duration_weeks": duration_weeks,

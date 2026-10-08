@@ -192,6 +192,12 @@ CI runs lint, tests, and Docker image builds on PRs to `main`. The `test` job st
 
 Early **v1.0.0** build-out: schema includes `users`, `projects`, `team_members`, `sprints`, `tasks`, `task_dependencies`, and `comments`. Team members, sprints, and tasks belong to a project (`project_id`); list them with `?project_id=`. `POST /api/v1/sprints/` generates consecutive 2-week windows from the project duration. A task’s `sprint_id` is optional (null in the backlog) and must point at a sprint on the same project. A team member’s display name is the linked user’s name, or their email if name is missing. Comments belong to a task (`task_id`); list them with `?task_id=`. Human comments set `user_id` from the cookie and `is_ai=false`; the client cannot send author fields. Cookie-auth CRUD exists for projects, team members, sprints, tasks, task dependencies, and comments.
 
-`POST /api/v1/projects/{project_id}/agents/run` (after register/login so the `access_token` cookie is set) runs the Requirement Analyzer: it writes `ai_opinion` on the project and creates backlog tasks (`sprint_id` null). Roster skills go into the prompt. A second run on the same project is `409`. Tests mock the LLM. A live run needs `OPENAI_API_KEY` in `.env`. Sprint Planner and Risk Analyzer are still later. The Kanban UI comes next alongside those agents.
+Cookie-auth agent routes (after register/login so the `access_token` cookie is set):
+
+- `POST /api/v1/projects/{project_id}/agents/run` — Requirement Analyzer: writes `ai_opinion` and creates backlog tasks (`sprint_id` null). Roster skills go into the prompt. A second run on the same project is `409`.
+- `POST /api/v1/projects/{project_id}/agents/plan-sprint` — Sprint Planner: capacity fill / pull from backlog (8 story points per person per 2-week sprint).
+- `POST /api/v1/projects/{project_id}/agents/analyze-risk` — Risk Analyzer: sets `Task.risk_flag` from tasks + comments. **409** if the project has no tasks.
+
+Tests mock the LLM. A live run needs `OPENAI_API_KEY` in `.env`. The API allows CORS from `http://localhost:3000` with credentials so the Next.js app can send the cookie. Set `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000` in the frontend env when you wire the UI (see `.env.example`). The Kanban / backlog UI is next.
 
 See [`AGENTS.md`](./AGENTS.md) for scope, task statuses, and agent roles.

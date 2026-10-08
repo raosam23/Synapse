@@ -1,11 +1,11 @@
 """Main application"""
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import router as api_router
 from app.core.config import settings
 
-from fastapi.middleware.cors import CORSMiddleware
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,

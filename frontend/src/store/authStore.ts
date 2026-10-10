@@ -20,7 +20,7 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set) => ({
     // Initial state
     user: null,
-    isLoading: false,
+    isLoading: true,
     error: null,
 
     checkAuth: async () => {

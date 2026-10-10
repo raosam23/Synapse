@@ -1,5 +1,5 @@
 export interface UserRead {
-    id: number;
+    id: string;
     email: string;
     name: string | null;
     created_at: string;

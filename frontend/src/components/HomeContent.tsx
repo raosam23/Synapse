@@ -27,6 +27,9 @@ const HomeContent = () => {
         <div>
           <p>Welcome, {user.name || user.email}!</p>
           <button onClick={handleLogout}>Logout</button>
+          <div>
+            <Link href="/projects">View Projects</Link>
+          </div>
         </div>
       ) : (
         <div>

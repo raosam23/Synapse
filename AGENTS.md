@@ -118,6 +118,18 @@ Synapse/
 | Database | Postgres (Docker Compose + SQLModel/Alembic) |
 | Package managers | `uv` (backend), `bun` (frontend) |
 
+## Frontend State Management
+
+- Use **Zustand** for global client state in the frontend whenever possible
+- Avoid local `useState` for state that needs to be shared across components or persists across navigation
+- Follow the pattern established in `frontend/src/store/authStore.ts` for creating new stores
+- Each store should:
+  - Live in `frontend/src/store/` directory
+  - Define clear types for state and actions
+  - Provide both state and actions in a single hook (e.g., `useAuthStore`, `useProjectStore`)
+  - Keep stores focused and single-purpose (e.g., auth, projects, tasks)
+- Use local `useState` only for truly local/temporary UI state (e.g., form field values before submission, modal open/close)
+
 ## MVP scope (v1.0.0)
 
 Source of truth: **this file** (and open GitHub issues for implementation slices). Issue #4 remains historical context.

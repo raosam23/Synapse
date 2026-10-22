@@ -8,7 +8,7 @@ import { Sprint } from "@/types/sprint";
 import { teamMemberApi } from "@/lib/teamMember";
 import { sprintApi } from "@/lib/sprint";
 import { taskApi } from "@/lib/task";
-import { Task } from "@/types/task";
+import { Task, TaskStatus } from "@/types/task";
 import { useAuthStore } from "@/store/authStore";
 
 const ProjectByIDPage = () => {
@@ -40,6 +40,28 @@ const ProjectByIDPage = () => {
 
   if (isLoading) return <div>Loading...</div>;
   if (error) return <div>Error: {error}</div>;
+
+  const backlog = tasks.filter((task) => task.status === TaskStatus.BACKLOG);
+  const boardTasks = tasks.filter(
+    (task) => task.sprint_id !== null && task.status !== TaskStatus.BACKLOG,
+  );
+
+  const moveTask = async (taskId: string, status: TaskStatus) => {
+    try {
+      setActionError(null);
+      const updated = await taskApi.update(taskId, { status });
+      setTasks(
+        (current) =>
+          current.map((task) =>
+            task.id === taskId ? updated : task,
+          ) as Task[],
+      );
+    } catch (err: unknown) {
+      setActionError(
+        err instanceof Error ? err.message : "Failed to update task status",
+      );
+    }
+  };
 
   return (
     <div>
@@ -224,16 +246,48 @@ const ProjectByIDPage = () => {
         </form>
       </div>
       <div>
-        <h2>Tasks</h2>
+        <h2>Backlog</h2>
         <ul>
-          {tasks.map((task) => (
+          {backlog.map((task) => (
             <li key={task.id}>
-              {task.title} - Status: {task.status} - Story Points:{" "}
-              {task.story_points || "N/A"}
+              {task.title} = Story Points: {task.story_points || "N/A"}
+              {task.assignee_id &&
+                ` - Assignee: ${teamMembers.find((member) => member.id === task.assignee_id)?.name ?? "Unknown"}`}
               {task.risk_flag && <span style={{ color: "red" }}>AT RISK</span>}
             </li>
           ))}
         </ul>
+        <h2>Sprint Board</h2>
+        {[TaskStatus.TODO, TaskStatus.DOING, TaskStatus.DONE].map((column) => (
+          <div key={column}>
+            <h3>{column}</h3>
+            <ul>
+              {boardTasks
+                .filter((task) => task.status === column)
+                .map((task) => (
+                  <li key={task.id}>
+                    {task.title} - Story Points: {task.story_points || "N/A"}
+                    {task.assignee_id &&
+                      ` - Assignee: ${teamMembers.find((member) => member.id === task.assignee_id)?.name ?? "Unknown"}`}
+                    {task.risk_flag && (
+                      <span style={{ color: "red" }}>AT RISK</span>
+                    )}
+                    {[TaskStatus.TODO, TaskStatus.DOING, TaskStatus.DONE]
+                      .filter((status) => status !== task.status)
+                      .map((status) => (
+                        <button
+                          key={status}
+                          type="button"
+                          onClick={() => moveTask(task.id, status)}
+                        >
+                          Move to {status}
+                        </button>
+                      ))}
+                  </li>
+                ))}
+            </ul>
+          </div>
+        ))}
       </div>
     </div>
   );
